@@ -1,4 +1,4 @@
-# mediassist
+# medi_assist
 
 A new Flutter project.
 

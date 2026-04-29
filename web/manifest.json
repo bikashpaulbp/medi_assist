@@ -1,6 +1,6 @@
 {
-    "name": "mediassist",
-    "short_name": "mediassist",
+    "name": "medi_assist",
+    "short_name": "medi_assist",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
