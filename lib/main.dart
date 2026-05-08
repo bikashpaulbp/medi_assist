@@ -1,38 +1,52 @@
+import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:alarm/alarm.dart';
-import 'package:mediassist/views/home_screen.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+
+import 'app.dart';
 import 'core/services/notification_service.dart';
-import 'core/services/permission_service.dart';
 import 'core/services/foreground_service.dart';
-import 'core/constants/app_theme.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await GetStorage.init();
-  await Alarm.init();
-  await NotificationService.initialize();
-  await PermissionService.requestAllPermissions();
-  ForegroundService.startService();
-
-  runApp(const MyApp());
+// ─── Top-level callback required by flutter_foreground_task ───────────────────
+@pragma('vm:entry-point')
+void startCallback() {
+  FlutterForegroundTask.setTaskHandler(MediAssistTaskHandler());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  @override
-  Widget build(BuildContext context) {
-    return GetMaterialApp(
-      title: 'MediAssist',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      defaultTransition: Transition.cupertino,
-      transitionDuration: const Duration(milliseconds: 300),
-      home: const HomeScreen(),
-    );
-  }
+  // Lock portrait orientation
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // Status bar style
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
+
+  // Initialize GetStorage
+  await GetStorage.init();
+
+  // Initialize timezone data
+  tz.initializeTimeZones();
+
+  // Initialize local notifications
+  await NotificationService.initialize();
+
+  // Initialize alarm package
+  await Alarm.init();
+
+  // Initialize foreground task communication port
+  FlutterForegroundTask.initCommunicationPort();
+
+  runApp(const MediAssistApp());
 }

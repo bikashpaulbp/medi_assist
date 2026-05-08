@@ -1,188 +1,270 @@
-// lib/core/services/foreground_service.dart
-import 'dart:isolate';
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:mediassist/models/activity_model.dart';
-import 'package:mediassist/models/meal_model.dart';
-import 'package:mediassist/models/medical_record_model.dart';
-import 'package:mediassist/models/medicine_model.dart';
-import 'notification_service.dart';
-import 'alarm_service.dart';
+import 'package:medi_assist/core/services/notification_service.dart';
+import '../../models/medicine_model.dart';
+import '../../models/meal_model.dart';
+import '../../models/activity_model.dart';
+import '../constants/app_constants.dart';
 
-class ForegroundService {
-  static void startService() {
-    FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'foreground_service_channel',
-        channelName: 'MediAssist Reminder Service',
-        channelDescription: 'This service ensures you never miss a health reminder.',
-        channelImportance: NotificationChannelImportance.HIGH,
-        priority: NotificationPriority.HIGH,
-      ),
-      iosNotificationOptions: const IOSNotificationOptions(
-        showNotification: true,
-        playSound: false,
-      ),
-      foregroundTaskOptions: ForegroundTaskOptions(
-        allowAutoRestart: true,
-        eventAction: ForegroundTaskEventAction.repeat(60000), // 1 minute
-        autoRunOnBoot: true,
-        allowWakeLock: true,
-      ),
-    );
 
-    FlutterForegroundTask.startService(
-      notificationTitle: 'MediAssist is active',
-      notificationText: 'Monitoring your reminders...',
-      notificationIcon: null,
-      callback: startCallback,
-    );
-  }
-
-  static void stopService() {
-    FlutterForegroundTask.stopService();
-  }
-
-  static Future<bool> isRunning() async {
-    return await FlutterForegroundTask.isRunningService;
-  }
-}
-
-@pragma('vm:entry-point')
-void startCallback() {
-  FlutterForegroundTask.setTaskHandler(MyTaskHandler());
-}
-
-class MyTaskHandler extends TaskHandler {
-  final GetStorage _storage = GetStorage();
+// ─── Task Handler (runs in background isolate) ────────────────────────────────
+class MediAssistTaskHandler extends TaskHandler {
+  Timer? _minuteTimer;
+  DateTime? _lastChecked;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    debugPrint('[ForegroundService] Started at: $timestamp, starter: $starter');
+    debugPrint('🟢 MediAssist foreground service started: $starter');
+    _lastChecked = DateTime.now();
+    // Initialize storage in background isolate
+    await GetStorage.init();
   }
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    debugPrint('[ForegroundService] Checking reminders at: $timestamp');
-    _checkAndTriggerReminders(timestamp);
+    _checkAndTriggerReminders();
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
-    debugPrint('[ForegroundService] Destroyed at: $timestamp');
+  Future<void> onDestroy(DateTime timestamp) async {
+    debugPrint('🔴 MediAssist foreground service destroyed');
+    _minuteTimer?.cancel();
   }
 
-  @override
-  void onNotificationButtonPressed(String id) {
-    debugPrint('[ForegroundService] Notification button pressed: $id');
-  }
+  // ─── Core reminder check logic ───────────────────────────────────────────────
+  void _checkAndTriggerReminders() {
+    final now = DateTime.now();
 
-  @override
-  void onNotificationPressed() {
-    debugPrint('[ForegroundService] Notification pressed');
-    FlutterForegroundTask.launchApp();
-  }
-
-  void _checkAndTriggerReminders(DateTime now) {
-    final medicines = _getMedicines();
-    final meals = _getMeals();
-    final activities = _getActivities();
-    final medicalRecords = _getMedicalRecords();
-
-    final currentTime = TimeOfDay(hour: now.hour, minute: now.minute);
-
-    for (var medicineJson in medicines) {
-      final medicine = Medicine.fromJson(medicineJson);
-      if (!medicine.isActive) continue;
-      for (var time in medicine.times) {
-        if (_isTimeMatch(currentTime, time)) {
-          _triggerNotification(medicine.name, 'Medicine', medicine.notificationType);
-        }
-      }
+    // Prevent duplicate triggers within same minute
+    if (_lastChecked != null &&
+        _lastChecked!.hour == now.hour &&
+        _lastChecked!.minute == now.minute &&
+        _lastChecked!.day == now.day) {
+      return;
     }
 
-    for (var mealJson in meals) {
-      final meal = Meal.fromJson(mealJson);
-      if (!meal.isActive) continue;
-      if (_isTimeMatch(currentTime, meal.time)) {
-        _triggerNotification(meal.name, 'Meal', meal.notificationType);
-      }
-    }
+    _lastChecked = now;
+    final currentHour = now.hour;
+    final currentMinute = now.minute;
 
-    for (var activityJson in activities) {
-      final activity = Activity.fromJson(activityJson);
-      if (!activity.isActive) continue;
-      if (_isTimeMatch(currentTime, activity.time)) {
-        _triggerNotification(activity.name, 'Activity', activity.notificationType);
-      }
-    }
+    final box = GetStorage();
 
-    final lastMedicalReminderDate = _storage.read<int>('last_medical_reminder_date');
-    const medicalReminderHour = 9;
-    const medicalReminderMinute = 0;
+    // ── Check medicines ──
+    try {
+      final medicinesData = box.read<List>(AppConstants.medicinesKey);
+      if (medicinesData != null) {
+        for (final data in medicinesData) {
+          final medicine =
+              Medicine.fromJson(Map<String, dynamic>.from(data as Map));
+          if (!medicine.isActive) continue;
+          if (medicine.notificationType == AppConstants.notifTypeNone) continue;
+          if (medicine.notificationType == AppConstants.notifTypeAlarm) {
+            continue; // alarm package handles this
+          }
 
-    if (now.hour == medicalReminderHour && now.minute == medicalReminderMinute) {
-      if (lastMedicalReminderDate != now.day) {
-        for (var recordJson in medicalRecords) {
-          final record = MedicalRecord.fromJson(recordJson);
-          if (!record.isActive) continue;
-          if (record.notificationType != 'none') {
-            _triggerNotification(record.type, 'Medical Checkup', record.notificationType);
+          for (final time in medicine.times) {
+            if (time.hour == currentHour && time.minute == currentMinute) {
+              _showReminderNotification(
+                id: AppConstants.medicineNotifBase +
+                    medicine.id.hashCode.abs() % 1000,
+                title: '💊 Medicine Reminder',
+                body: 'Time to take ${medicine.name}',
+                channelId: AppConstants.medicineChannelId,
+                channelName: AppConstants.medicineChannelName,
+              );
+            }
           }
         }
-        _storage.write('last_medical_reminder_date', now.day);
+      }
+    } catch (e) {
+      debugPrint('Error checking medicines: $e');
+    }
+
+    // ── Check meals ──
+    try {
+      final mealsData = box.read<List>(AppConstants.mealsKey);
+      if (mealsData != null) {
+        for (final data in mealsData) {
+          final meal = Meal.fromJson(Map<String, dynamic>.from(data as Map));
+          if (!meal.isActive) continue;
+          if (meal.notificationType == AppConstants.notifTypeNone) continue;
+          if (meal.notificationType == AppConstants.notifTypeAlarm) continue;
+
+          if (meal.time.hour == currentHour &&
+              meal.time.minute == currentMinute) {
+            _showReminderNotification(
+              id: AppConstants.mealNotifBase + meal.id.hashCode.abs() % 1000,
+              title: '🍽️ Meal Reminder',
+              body: 'Time for ${meal.name}',
+              channelId: AppConstants.mealChannelId,
+              channelName: AppConstants.mealChannelName,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking meals: $e');
+    }
+
+    // ── Check activities ──
+    try {
+      final activitiesData = box.read<List>(AppConstants.activitiesKey);
+      if (activitiesData != null) {
+        for (final data in activitiesData) {
+          final activity =
+              Activity.fromJson(Map<String, dynamic>.from(data as Map));
+          if (!activity.isActive) continue;
+          if (activity.notificationType == AppConstants.notifTypeNone) continue;
+          if (activity.notificationType == AppConstants.notifTypeAlarm) continue;
+
+          if (activity.time.hour == currentHour &&
+              activity.time.minute == currentMinute) {
+            _showReminderNotification(
+              id: AppConstants.activityNotifBase +
+                  activity.id.hashCode.abs() % 1000,
+              title: '🏃 Activity Reminder',
+              body: 'Time for ${activity.name}',
+              channelId: AppConstants.activityChannelId,
+              channelName: AppConstants.activityChannelName,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking activities: $e');
+    }
+  }
+
+  // ─── Show notification from background isolate ───────────────────────────────
+  void _showReminderNotification({
+    required int id,
+    required String title,
+    required String body,
+    required String channelId,
+    required String channelName,
+  }) {
+    // Send data to main isolate to show notification
+    FlutterForegroundTask.sendDataToMain({
+      'type': 'reminder',
+      'id': id,
+      'title': title,
+      'body': body,
+      'channelId': channelId,
+      'channelName': channelName,
+    });
+    debugPrint('📣 Reminder triggered: $title — $body');
+  }
+}
+
+// ─── Foreground Service Manager ───────────────────────────────────────────────
+class MediAssistForegroundService {
+  MediAssistForegroundService._();
+
+  // ─── Initialize ─────────────────────────────────────────────────────────────
+  static void initService() {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: AppConstants.foregroundChannelId,
+        channelName: AppConstants.foregroundChannelName,
+        channelDescription:
+            'MediAssist is running to deliver your reminders on time.',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+        onlyAlertOnce: true,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: false,
+        playSound: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        // Check every 60 seconds
+        eventAction: ForegroundTaskEventAction.repeat(60000),
+        autoRunOnBoot: true,
+        autoRunOnMyPackageReplaced: true,
+        allowWakeLock: true,
+        allowWifiLock: false,
+      ),
+    );
+  }
+
+  // ─── Start Service ───────────────────────────────────────────────────────────
+  static Future<void> startService() async {
+    try {
+      // Register data receiver from background isolate
+      FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+
+      if (await FlutterForegroundTask.isRunningService) {
+        await FlutterForegroundTask.restartService();
+        debugPrint('🔄 Foreground service restarted');
+      } else {
+        await FlutterForegroundTask.startService(
+          serviceId: 2025,
+          notificationTitle: 'MediAssist',
+          notificationText: 'Monitoring your health reminders 24/7',
+          notificationIcon: null,
+          callback: startCallback,
+        );
+        debugPrint('🟢 Foreground service started');
+      }
+    } catch (e) {
+      debugPrint('❌ Failed to start foreground service: $e');
+    }
+  }
+
+  // ─── Stop Service ────────────────────────────────────────────────────────────
+  static Future<void> stopService() async {
+    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
+    await FlutterForegroundTask.stopService();
+    debugPrint('🔴 Foreground service stopped');
+  }
+
+  // ─── Receive Data from Background Isolate ────────────────────────────────────
+  static void _onReceiveTaskData(Object data) {
+    if (data is Map<String, dynamic>) {
+      final type = data['type'] as String?;
+      if (type == 'reminder') {
+        // Show notification from main isolate
+        _showNotificationFromMainIsolate(data);
       }
     }
   }
 
-  bool _isTimeMatch(TimeOfDay current, TimeOfDay scheduled) {
-    return current.hour == scheduled.hour && current.minute == scheduled.minute;
-  }
-
-  void _triggerNotification(String name, String type, String notificationType) {
-    final title = '$type Reminder';
-    final body = 'Time to $name';
-    final id = '$name-$type-${DateTime.now().millisecondsSinceEpoch}'.hashCode.abs();
-
-    switch (notificationType) {
-      case 'notification':
-        NotificationService.showNotification(
-          id: id,
-          title: title,
-          body: body,
-        );
-        break;
-      case 'alarm':
-        final alarmTime = DateTime.now().add(const Duration(seconds: 30));
-        AlarmService.scheduleAlarm(
-          id: id,
-          time: alarmTime,
-          title: title,
-          body: body,
-        );
-        break;
-      case 'both':
-        NotificationService.showNotification(
-          id: id,
-          title: title,
-          body: body,
-        );
-        final alarmTime = DateTime.now().add(const Duration(seconds: 30));
-        AlarmService.scheduleAlarm(
-          id: id + 1,
-          time: alarmTime,
-          title: title,
-          body: body,
-        );
-        break;
-      default:
-        break;
+  static void _showNotificationFromMainIsolate(
+      Map<String, dynamic> data) async {
+    try {
+      await NotificationService.to.showImmediateNotification(
+        id: data['id'] as int,
+        title: data['title'] as String,
+        body: data['body'] as String,
+        channelId: data['channelId'] as String,
+        channelName: data['channelName'] as String,
+      );
+    } catch (e) {
+      debugPrint('❌ Error showing notification from main isolate: $e');
     }
   }
 
-  List<dynamic> _getMedicines() => _storage.read<List<dynamic>>('medicines') ?? [];
-  List<dynamic> _getMeals() => _storage.read<List<dynamic>>('meals') ?? [];
-  List<dynamic> _getActivities() => _storage.read<List<dynamic>>('activities') ?? [];
-  List<dynamic> _getMedicalRecords() => _storage.read<List<dynamic>>('medical_records') ?? [];
+  // ─── Check Status ────────────────────────────────────────────────────────────
+  static Future<bool> get isRunning async {
+    return await FlutterForegroundTask.isRunningService;
+  }
+
+  // ─── Update Notification Text ────────────────────────────────────────────────
+  static Future<void> updateNotificationText(String text) async {
+    await FlutterForegroundTask.updateService(
+      notificationTitle: 'MediAssist',
+      notificationText: text,
+    );
+  }
+}
+
+// ─── Top-level callback — MUST be defined in main.dart too ───────────────────
+// This is referenced from main.dart's startCallback()
+// The actual definition is in main.dart:
+@pragma('vm:entry-point')
+void startCallback() {
+  FlutterForegroundTask.setTaskHandler(MediAssistTaskHandler());
 }

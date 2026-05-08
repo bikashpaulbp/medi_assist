@@ -1,4 +1,3 @@
-// lib/models/activity_model.dart
 import 'package:flutter/material.dart';
 
 class Activity {
@@ -7,6 +6,7 @@ class Activity {
   final TimeOfDay time;
   final String notificationType; // 'notification', 'alarm', 'both', 'none'
   final bool isActive;
+  final DateTime createdAt;
 
   Activity({
     required this.id,
@@ -14,37 +14,17 @@ class Activity {
     required this.time,
     required this.notificationType,
     this.isActive = true,
-  });
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'time': '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
-      'notificationType': notificationType,
-      'isActive': isActive,
-    };
-  }
-
-  factory Activity.fromJson(Map<String, dynamic> json) {
-    final timeStr = json['time'];
-    final parts = timeStr.split(':');
-    final time = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-    return Activity(
-      id: json['id'],
-      name: json['name'],
-      time: time,
-      notificationType: json['notificationType'],
-      isActive: json['isActive'] ?? true,
-    );
-  }
-
+  // ─── Copy With ──────────────────────────────────────────────────────────────
   Activity copyWith({
     String? id,
     String? name,
     TimeOfDay? time,
     String? notificationType,
     bool? isActive,
+    DateTime? createdAt,
   }) {
     return Activity(
       id: id ?? this.id,
@@ -52,6 +32,55 @@ class Activity {
       time: time ?? this.time,
       notificationType: notificationType ?? this.notificationType,
       isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  // ─── JSON Serialization ─────────────────────────────────────────────────────
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'time': {'hour': time.hour, 'minute': time.minute},
+      'notificationType': notificationType,
+      'isActive': isActive,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory Activity.fromJson(Map<String, dynamic> json) {
+    final timeMap = json['time'] as Map;
+    return Activity(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      time: TimeOfDay(
+        hour: timeMap['hour'] as int,
+        minute: timeMap['minute'] as int,
+      ),
+      notificationType: json['notificationType'] as String,
+      isActive: json['isActive'] as bool? ?? true,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+  String get formattedTime {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  @override
+  String toString() => 'Activity(id: $id, name: $name, time: $formattedTime)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Activity && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

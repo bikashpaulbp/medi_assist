@@ -1,163 +1,201 @@
-// lib/core/services/permission_service.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:open_settings/open_settings.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:battery_optimization_helper/battery_optimization_helper.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:get/get.dart';
-import 'package:permission_handler/permission_handler.dart' as permission_handler;
+import 'package:permission_handler/permission_handler.dart';
+import '../constants/app_colors.dart';
+import '../services/notification_service.dart';
 
-class PermissionService {
-  // Called on app start
-  static Future<void> requestAllPermissions() async {
-    final List<Permission> permissions = [];
+class PermissionService extends GetxService {
+  static PermissionService get to => Get.find();
 
-    // Notification permission is required on both platforms.
-    permissions.add(Permission.notification);
-
+  // ─── Request All Permissions ─────────────────────────────────────────────────
+  Future<void> requestAllPermissions() async {
+    await requestNotificationPermission();
+    await requestExactAlarmPermission();
+    await requestBatteryOptimizationPermission();
     if (Platform.isAndroid) {
-      // These are Android specific permissions.
-      permissions.add(Permission.ignoreBatteryOptimizations);
-      permissions.add(Permission.scheduleExactAlarm);
-      // Note: RECEIVE_BOOT_COMPLETED and FOREGROUND_SERVICE are set in the manifest only.
-    }
-
-    // Request all required permissions at once.
-    final Map<Permission, PermissionStatus> statuses = await permissions.request();
-
-    for (final Permission permission in permissions) {
-      final PermissionStatus status = statuses[permission]!;
-      if (!status.isGranted && permission == Permission.ignoreBatteryOptimizations) {
-        // Fallback to showing a manual dialog for battery optimisation.
-        await requestBatteryOptimization();
-      }
+      await requestSystemAlertWindowPermission();
     }
   }
 
-  // Check status for a single permission
-  static Future<PermissionStatus> getPermissionStatus(Permission permission) async {
-    return await permission.status;
-  }
-
-  // Check if a specific permission is granted
-  static Future<bool> isPermissionGranted(Permission permission) async {
-    final status = await permission.status;
-    return status.isGranted;
-  }
-
-  // Request single permission with rationale
-  static Future<bool> requestPermission(Permission permission, {String? rationale}) async {
-    if (rationale != null && Platform.isAndroid) {
-      final status = await permission.status;
-      if (status.isDenied) {
-        // Show a custom rationale dialog before requesting.
-        final shouldRequest = await _showRationaleDialog(rationale);
-        if (!shouldRequest) return false;
-      }
+  // ─── Notification Permission ─────────────────────────────────────────────────
+  Future<bool> requestNotificationPermission() async {
+    if (Platform.isAndroid) {
+      // Android 13+ needs POST_NOTIFICATIONS
+      final status = await Permission.notification.request();
+      debugPrint('📣 Notification permission: $status');
+      return status.isGranted;
+    } else {
+      final granted =
+          await NotificationService.to.requestPermission();
+      return granted;
     }
-    final status = await permission.request();
-    return status.isGranted;
   }
 
-  static Future<bool> _showRationaleDialog(String message) async {
+  Future<bool> get isNotificationGranted async {
+    return await Permission.notification.isGranted;
+  }
+
+  // ─── Exact Alarm Permission (Android 12+) ────────────────────────────────────
+  Future<bool> requestExactAlarmPermission() async {
+    if (!Platform.isAndroid) return true;
+
+    try {
+      // Check if permission is needed
+      final canSchedule =
+          await FlutterForegroundTask.canScheduleExactAlarms;
+      if (canSchedule) return true;
+
+      // Open settings for user to grant
+      await FlutterForegroundTask.openAlarmsAndRemindersSettings();
+      return false;
+    } catch (e) {
+      debugPrint('⚠️ Exact alarm permission check failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> get canScheduleExactAlarms async {
+    if (!Platform.isAndroid) return true;
+    try {
+      return await FlutterForegroundTask.canScheduleExactAlarms;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ─── Battery Optimization ────────────────────────────────────────────────────
+  Future<bool> requestBatteryOptimizationPermission() async {
+    if (!Platform.isAndroid) return true;
+
+    try {
+      final isIgnoring =
+          await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+      if (isIgnoring) return true;
+
+      // Show dialog explaining why, then open settings
+      await _showBatteryOptimizationDialog();
+      return false;
+    } catch (e) {
+      debugPrint('⚠️ Battery optimization check failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> get isBatteryOptimizationIgnored async {
+    if (!Platform.isAndroid) return true;
+    try {
+      return await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _showBatteryOptimizationDialog() async {
     final result = await Get.dialog<bool>(
       AlertDialog(
-        title: const Text('Permission Needed'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Get.back(result: true),
-            child: const Text('Allow'),
-          ),
-        ],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.battery_saver_outlined,
+                color: AppColors.warning,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Disable Battery Optimization',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'To ensure MediAssist can deliver medicine and meal reminders on time — even when your phone is idle — please disable battery optimization for this app.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Get.back(result: false),
+                    child: const Text('Skip'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Get.back(result: true),
+                    child: const Text('Open Settings'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-    );
-    return result ?? false;
-  }
-
-  // Comprehensive Battery Optimization Handling using battery_optimization_helper
-  static Future<void> requestBatteryOptimization() async {
-    if (!Platform.isAndroid) return;
-
-    final outcome = await BatteryOptimizationHelper.ensureOptimizationDisabledDetailed(
-      openSettingsIfDirectRequestNotPossible: true,
+      barrierDismissible: false,
     );
 
-    switch (outcome.status) {
-      case OptimizationOutcomeStatus.alreadyDisabled:
-        debugPrint('Battery optimization already disabled.');
-        break;
-      case OptimizationOutcomeStatus.disabledAfterPrompt:
-        debugPrint('User disabled battery optimization.');
-        break;
-      case OptimizationOutcomeStatus.settingsOpened:
-        Get.snackbar(
-          'Battery Settings Opened',
-          'Please disable battery optimization for MediAssist to ensure reliable reminders.',
-          snackPosition: SnackPosition.BOTTOM,
-          duration: const Duration(seconds: 5),
-        );
-        break;
-      case OptimizationOutcomeStatus.unsupported:
-      case OptimizationOutcomeStatus.failed:
-        debugPrint('Could not disable battery optimization.');
-        // Secondary attempt: Open generic battery settings
-        await BatteryOptimizationHelper.openBatteryOptimizationSettings();
-        break;
+    if (result == true) {
+      await FlutterForegroundTask.openIgnoreBatteryOptimizationSettings();
     }
   }
 
-  // Open manufacturer-specific auto-start settings (Xiaomi, Oppo, etc.)
-  static Future<void> openAutoStartSettings() async {
-    if (!Platform.isAndroid) return;
-    final opened = await BatteryOptimizationHelper.openAutoStartSettings();
-    if (!opened) {
-      Get.snackbar(
-        'Manual Setup Required',
-        'Please manually add MediAssist to your device\'s Auto-start or Protected Apps list in Settings.',
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 6),
-      );
+  // ─── System Alert Window (Draw Over Apps) ────────────────────────────────────
+  Future<bool> requestSystemAlertWindowPermission() async {
+    if (!Platform.isAndroid) return true;
+
+    try {
+      final canDraw = await FlutterForegroundTask.canDrawOverlays;
+      if (canDraw) return true;
+
+      final status = await Permission.systemAlertWindow.request();
+      return status.isGranted;
+    } catch (e) {
+      debugPrint('⚠️ System alert window check failed: $e');
+      return false;
     }
   }
 
-  // Generic method to open alarm settings using open_settings package
-  // static Future<void> openAlarmSettings() async {
-  //   if (!Platform.isAndroid) return;
-  //   await OpenSettings.openAlarmSetting();
-  // }
+  // ─── Check All Permissions Status ────────────────────────────────────────────
+  Future<Map<String, bool>> checkAllPermissions() async {
+    final notif = await Permission.notification.isGranted;
+    final battery = await isBatteryOptimizationIgnored;
+    final exactAlarm = await canScheduleExactAlarms;
 
-  static Future<void> checkAndRequestAlarmPermission() async {
-  final status = await Permission.scheduleExactAlarm.status;
-  if (!status.isGranted) {
-    await Permission.scheduleExactAlarm.request();
-  }
-}
-
-  // Generic method to open notification settings using open_settings package
-  static Future<void> openNotificationSettings() async {
-    if (!Platform.isAndroid) return;
-    await OpenSettings.openNotificationSetting();
+    return {
+      'notification': notif,
+      'batteryOptimization': battery,
+      'exactAlarm': exactAlarm,
+    };
   }
 
-  // Generic method to open date settings using open_settings package
-  static Future<void> openDateSettings() async {
-    if (!Platform.isAndroid) return;
-    await OpenSettings.openDateSetting();
+  // ─── Permission Status Summary ───────────────────────────────────────────────
+  Future<bool> get areAllCriticalPermissionsGranted async {
+    final notif = await Permission.notification.isGranted;
+    final exactAlarm = await canScheduleExactAlarms;
+    return notif && exactAlarm;
   }
 
-  // Open the main app settings page (where user can grant permissions)
-  static Future<void> openAppSettings() async {
-    await permission_handler.openAppSettings(); // This is a top-level function from permission_handler
-  }
-
-  // Get a diagnostic snapshot of battery restrictions
-  static Future<BatteryRestrictionSnapshot?> getBatteryRestrictionSnapshot() async {
-    if (!Platform.isAndroid) return null;
-    return await BatteryOptimizationHelper.getBatteryRestrictionSnapshot();
+  // ─── Open App Settings ───────────────────────────────────────────────────────
+  Future<void> openAppSettings() async {
+    await openAppSettings();
   }
 }

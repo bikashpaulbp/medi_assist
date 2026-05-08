@@ -1,4 +1,3 @@
-// lib/models/medicine_model.dart
 import 'package:flutter/material.dart';
 
 class Medicine {
@@ -7,6 +6,7 @@ class Medicine {
   final List<TimeOfDay> times;
   final String notificationType; // 'notification', 'alarm', 'both', 'none'
   final bool isActive;
+  final DateTime createdAt;
 
   Medicine({
     required this.id,
@@ -14,50 +14,17 @@ class Medicine {
     required this.times,
     required this.notificationType,
     this.isActive = true,
-  });
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
-  // Convert to JSON
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'times': times.map((time) => _timeOfDayToString(time)).toList(),
-      'notificationType': notificationType,
-      'isActive': isActive,
-    };
-  }
-
-  // Create from JSON
-  factory Medicine.fromJson(Map<String, dynamic> json) {
-    return Medicine(
-      id: json['id'],
-      name: json['name'],
-      times: (json['times'] as List)
-          .map((timeStr) => _stringToTimeOfDay(timeStr))
-          .toList(),
-      notificationType: json['notificationType'],
-      isActive: json['isActive'] ?? true,
-    );
-  }
-
-  // Helper: TimeOfDay -> String (HH:mm)
-  static String _timeOfDayToString(TimeOfDay time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-  }
-
-  // Helper: String -> TimeOfDay
-  static TimeOfDay _stringToTimeOfDay(String timeStr) {
-    final parts = timeStr.split(':');
-    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-  }
-
-  // Create a copy with updated fields
+  // ─── Copy With ──────────────────────────────────────────────────────────────
   Medicine copyWith({
     String? id,
     String? name,
     List<TimeOfDay>? times,
     String? notificationType,
     bool? isActive,
+    DateTime? createdAt,
   }) {
     return Medicine(
       id: id ?? this.id,
@@ -65,6 +32,76 @@ class Medicine {
       times: times ?? this.times,
       notificationType: notificationType ?? this.notificationType,
       isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  // ─── JSON Serialization ─────────────────────────────────────────────────────
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'times': times
+          .map((t) => {'hour': t.hour, 'minute': t.minute})
+          .toList(),
+      'notificationType': notificationType,
+      'isActive': isActive,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory Medicine.fromJson(Map<String, dynamic> json) {
+    return Medicine(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      times: (json['times'] as List)
+          .map((t) => TimeOfDay(
+                hour: (t as Map)['hour'] as int,
+                minute: t['minute'] as int,
+              ))
+          .toList(),
+      notificationType: json['notificationType'] as String,
+      isActive: json['isActive'] as bool? ?? true,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+
+  /// Returns formatted times as "08:00 AM, 02:00 PM"
+  String get formattedTimes {
+    return times.map((t) => _formatTime(t)).join(', ');
+  }
+
+  /// Returns first time for display
+  String get firstTimeFormatted {
+    if (times.isEmpty) return '--';
+    return _formatTime(times.first);
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  /// Generates unique notification IDs for each time slot
+  /// Base: medicineNotifBase (1000) + index
+  List<int> getNotificationIds(int baseId) {
+    return List.generate(times.length, (i) => baseId + i);
+  }
+
+  @override
+  String toString() => 'Medicine(id: $id, name: $name, times: $formattedTimes)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Medicine && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

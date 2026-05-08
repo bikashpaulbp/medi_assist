@@ -1,121 +1,201 @@
-// lib/core/services/storage_service.dart
+import 'dart:convert';
+import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import '../../models/medicine_model.dart';
 import '../../models/meal_model.dart';
 import '../../models/medical_record_model.dart';
 import '../../models/activity_model.dart';
+import '../constants/app_constants.dart';
 
-class StorageService {
-  static const String medicinesKey = 'medicines';
-  static const String mealsKey = 'meals';
-  static const String medicalRecordsKey = 'medical_records';
-  static const String activitiesKey = 'activities';
+class StorageService extends GetxService {
+  static StorageService get to => Get.find();
 
-  final GetStorage _storage = GetStorage();
+  final _box = GetStorage();
 
-  // ========== Generic helpers ==========
-  List<dynamic> _readList(String key) {
-    return _storage.read<List<dynamic>>(key) ?? [];
-  }
+  // ─── MEDICINE ────────────────────────────────────────────────────────────────
 
-  void _writeList(String key, List<dynamic> list) {
-    _storage.write(key, list);
-  }
-
-  // ========== Medicine CRUD ==========
   List<Medicine> getMedicines() {
-    final List<dynamic> data = _readList(medicinesKey);
-    return data.map((item) => Medicine.fromJson(item)).toList();
-  }
-
-  void saveMedicine(Medicine medicine) {
-    final List<Medicine> medicines = getMedicines();
-    final int index = medicines.indexWhere((m) => m.id == medicine.id);
-    if (index != -1) {
-      medicines[index] = medicine;
-    } else {
-      medicines.add(medicine);
+    try {
+      final data = _box.read<List>(AppConstants.medicinesKey);
+      if (data == null) return [];
+      return data
+          .map((e) => Medicine.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      return [];
     }
-    _writeList(medicinesKey, medicines.map((m) => m.toJson()).toList());
   }
 
-  void deleteMedicine(String id) {
-    final List<Medicine> medicines = getMedicines();
-    medicines.removeWhere((m) => m.id == id);
-    _writeList(medicinesKey, medicines.map((m) => m.toJson()).toList());
+  Future<void> saveMedicines(List<Medicine> medicines) async {
+    final data = medicines.map((e) => e.toJson()).toList();
+    await _box.write(AppConstants.medicinesKey, data);
   }
 
-  // ========== Meal CRUD ==========
+  Future<void> addMedicine(Medicine medicine) async {
+    final list = getMedicines();
+    list.add(medicine);
+    await saveMedicines(list);
+  }
+
+  Future<void> updateMedicine(Medicine medicine) async {
+    final list = getMedicines();
+    final idx = list.indexWhere((e) => e.id == medicine.id);
+    if (idx != -1) {
+      list[idx] = medicine;
+      await saveMedicines(list);
+    }
+  }
+
+  Future<void> deleteMedicine(String id) async {
+    final list = getMedicines();
+    list.removeWhere((e) => e.id == id);
+    await saveMedicines(list);
+  }
+
+  // ─── MEAL ────────────────────────────────────────────────────────────────────
+
   List<Meal> getMeals() {
-    final List<dynamic> data = _readList(mealsKey);
-    return data.map((item) => Meal.fromJson(item)).toList();
-  }
-
-  void saveMeal(Meal meal) {
-    final List<Meal> meals = getMeals();
-    final int index = meals.indexWhere((m) => m.id == meal.id);
-    if (index != -1) {
-      meals[index] = meal;
-    } else {
-      meals.add(meal);
+    try {
+      final data = _box.read<List>(AppConstants.mealsKey);
+      if (data == null) return [];
+      return data
+          .map((e) => Meal.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      return [];
     }
-    _writeList(mealsKey, meals.map((m) => m.toJson()).toList());
   }
 
-  void deleteMeal(String id) {
-    final List<Meal> meals = getMeals();
-    meals.removeWhere((m) => m.id == id);
-    _writeList(mealsKey, meals.map((m) => m.toJson()).toList());
+  Future<void> saveMeals(List<Meal> meals) async {
+    final data = meals.map((e) => e.toJson()).toList();
+    await _box.write(AppConstants.mealsKey, data);
   }
 
-  // ========== Medical Record CRUD ==========
+  Future<void> addMeal(Meal meal) async {
+    final list = getMeals();
+    list.add(meal);
+    await saveMeals(list);
+  }
+
+  Future<void> updateMeal(Meal meal) async {
+    final list = getMeals();
+    final idx = list.indexWhere((e) => e.id == meal.id);
+    if (idx != -1) {
+      list[idx] = meal;
+      await saveMeals(list);
+    }
+  }
+
+  Future<void> deleteMeal(String id) async {
+    final list = getMeals();
+    list.removeWhere((e) => e.id == id);
+    await saveMeals(list);
+  }
+
+  // ─── MEDICAL RECORDS ─────────────────────────────────────────────────────────
+
   List<MedicalRecord> getMedicalRecords() {
-    final List<dynamic> data = _readList(medicalRecordsKey);
-    return data.map((item) => MedicalRecord.fromJson(item)).toList();
-  }
-
-  void saveMedicalRecord(MedicalRecord record) {
-    final List<MedicalRecord> records = getMedicalRecords();
-    final int index = records.indexWhere((r) => r.id == record.id);
-    if (index != -1) {
-      records[index] = record;
-    } else {
-      records.add(record);
+    try {
+      final data = _box.read<List>(AppConstants.medicalRecordsKey);
+      if (data == null) return [];
+      return data
+          .map((e) => MedicalRecord.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      return [];
     }
-    _writeList(medicalRecordsKey, records.map((r) => r.toJson()).toList());
   }
 
-  void deleteMedicalRecord(String id) {
-    final List<MedicalRecord> records = getMedicalRecords();
-    records.removeWhere((r) => r.id == id);
-    _writeList(medicalRecordsKey, records.map((r) => r.toJson()).toList());
+  List<MedicalRecord> getMedicalRecordsByType(String type) {
+    return getMedicalRecords().where((e) => e.type == type).toList()
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
   }
 
-  // ========== Activity CRUD ==========
+  Future<void> saveMedicalRecords(List<MedicalRecord> records) async {
+    final data = records.map((e) => e.toJson()).toList();
+    await _box.write(AppConstants.medicalRecordsKey, data);
+  }
+
+  Future<void> addMedicalRecord(MedicalRecord record) async {
+    final list = getMedicalRecords();
+    list.add(record);
+    await saveMedicalRecords(list);
+  }
+
+  Future<void> updateMedicalRecord(MedicalRecord record) async {
+    final list = getMedicalRecords();
+    final idx = list.indexWhere((e) => e.id == record.id);
+    if (idx != -1) {
+      list[idx] = record;
+      await saveMedicalRecords(list);
+    }
+  }
+
+  Future<void> deleteMedicalRecord(String id) async {
+    final list = getMedicalRecords();
+    list.removeWhere((e) => e.id == id);
+    await saveMedicalRecords(list);
+  }
+
+  // ─── ACTIVITY ────────────────────────────────────────────────────────────────
+
   List<Activity> getActivities() {
-    final List<dynamic> data = _readList(activitiesKey);
-    return data.map((item) => Activity.fromJson(item)).toList();
-  }
-
-  void saveActivity(Activity activity) {
-    final List<Activity> activities = getActivities();
-    final int index = activities.indexWhere((a) => a.id == activity.id);
-    if (index != -1) {
-      activities[index] = activity;
-    } else {
-      activities.add(activity);
+    try {
+      final data = _box.read<List>(AppConstants.activitiesKey);
+      if (data == null) return [];
+      return data
+          .map((e) => Activity.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      return [];
     }
-    _writeList(activitiesKey, activities.map((a) => a.toJson()).toList());
   }
 
-  void deleteActivity(String id) {
-    final List<Activity> activities = getActivities();
-    activities.removeWhere((a) => a.id == id);
-    _writeList(activitiesKey, activities.map((a) => a.toJson()).toList());
+  Future<void> saveActivities(List<Activity> activities) async {
+    final data = activities.map((e) => e.toJson()).toList();
+    await _box.write(AppConstants.activitiesKey, data);
   }
 
-  // ========== Utility ==========
-  void clearAllData() {
-    _storage.erase();
+  Future<void> addActivity(Activity activity) async {
+    final list = getActivities();
+    list.add(activity);
+    await saveActivities(list);
+  }
+
+  Future<void> updateActivity(Activity activity) async {
+    final list = getActivities();
+    final idx = list.indexWhere((e) => e.id == activity.id);
+    if (idx != -1) {
+      list[idx] = activity;
+      await saveActivities(list);
+    }
+  }
+
+  Future<void> deleteActivity(String id) async {
+    final list = getActivities();
+    list.removeWhere((e) => e.id == id);
+    await saveActivities(list);
+  }
+
+  // ─── GENERIC HELPERS ─────────────────────────────────────────────────────────
+
+  Future<void> clearAll() async {
+    await _box.erase();
+  }
+
+  bool getBool(String key, {bool defaultValue = false}) {
+    return _box.read<bool>(key) ?? defaultValue;
+  }
+
+  Future<void> setBool(String key, bool value) async {
+    await _box.write(key, value);
+  }
+
+  String getString(String key, {String defaultValue = ''}) {
+    return _box.read<String>(key) ?? defaultValue;
+  }
+
+  Future<void> setString(String key, String value) async {
+    await _box.write(key, value);
   }
 }
