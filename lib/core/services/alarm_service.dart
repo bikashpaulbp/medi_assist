@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../constants/app_constants.dart';
 
-
 class AlarmService extends GetxService {
   static AlarmService get to => Get.find();
 
@@ -19,7 +18,6 @@ class AlarmService extends GetxService {
     bool enableNotificationOnKill = true,
   }) async {
     try {
-      // Calculate next occurrence
       final now = DateTime.now();
       DateTime scheduledTime = DateTime(
         now.year,
@@ -42,9 +40,12 @@ class AlarmService extends GetxService {
         assetAudioPath: AppConstants.alarmAudioPath,
         loopAudio: loopAudio,
         vibrate: vibrate,
-        volumeSettings: VolumeSettings.fade(fadeDuration:const Duration()),
-        // volume: 1.0,
-        // fadeDuration: 3.0,
+        // ── v5.x uses VolumeSettings instead of volume + fadeDuration ──
+        volumeSettings: VolumeSettings.fade(
+          volume: 1.0,
+          fadeDuration: const Duration(seconds: 3),
+           
+        ),
         warningNotificationOnKill: enableNotificationOnKill,
         androidFullScreenIntent: true,
         notificationSettings: NotificationSettings(
@@ -79,12 +80,14 @@ class AlarmService extends GetxService {
   }
 
   // ─── Get All Active Alarms ───────────────────────────────────────────────────
-  List<AlarmSettings> getActiveAlarms() {
-    return Alarm.getAlarms();
+  // ── v5.x: Alarm.getAlarms() returns Future<List<AlarmSettings>> ──
+  Future<List<AlarmSettings>> getActiveAlarms() async {
+    return await Alarm.getAlarms();
   }
 
-  bool isAlarmActive(int alarmId) {
-    return Alarm.getAlarms().any((a) => a.id == alarmId);
+  Future<bool> isAlarmActive(int alarmId) async {
+    final alarms = await Alarm.getAlarms();
+    return alarms.any((a) => a.id == alarmId);
   }
 
   // ─── Medicine Alarms ─────────────────────────────────────────────────────────
@@ -174,7 +177,8 @@ class AlarmService extends GetxService {
       final notifType = medicine.notificationType as String;
       if (notifType == AppConstants.notifTypeAlarm ||
           notifType == AppConstants.notifTypeBoth) {
-        final baseId = AppConstants.medicineAlarmBase +
+        final baseId =
+            AppConstants.medicineAlarmBase +
             (medicine.id.hashCode.abs() % 100) * 10;
         await scheduleMedicineAlarms(
           medicineId: medicine.id,
@@ -207,7 +211,8 @@ class AlarmService extends GetxService {
       if (notifType == AppConstants.notifTypeAlarm ||
           notifType == AppConstants.notifTypeBoth) {
         final alarmId =
-            AppConstants.activityAlarmBase + (activity.id.hashCode.abs() % 1000);
+            AppConstants.activityAlarmBase +
+            (activity.id.hashCode.abs() % 1000);
         await scheduleActivityAlarm(
           activityId: activity.id,
           activityName: activity.name,

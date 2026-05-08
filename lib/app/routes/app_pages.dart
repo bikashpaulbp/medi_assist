@@ -99,4 +99,4 @@ class AppPages {
       transition: Transition.rightToLeft,
     ),
   ];
-}
+} 
