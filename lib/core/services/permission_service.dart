@@ -195,7 +195,7 @@ class PermissionService extends GetxService {
   }
 
   // ─── Open App Settings ───────────────────────────────────────────────────────
-  Future<void> openAppSettings() async {
-    await openAppSettings();
-  }
+ Future<void> openApplicationSettings() async {
+  await openAppSettings();   // openAppSettings() from permission_handler package
+}
 }

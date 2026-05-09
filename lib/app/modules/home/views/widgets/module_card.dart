@@ -45,7 +45,6 @@ class _ModuleCardState extends State<ModuleCard>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-
     _scaleAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
@@ -62,7 +61,6 @@ class _ModuleCardState extends State<ModuleCard>
       CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
     );
 
-    // Staggered entry animation
     Future.delayed(widget.animationDelay, () {
       if (mounted) _controller.forward();
     });
@@ -76,8 +74,6 @@ class _ModuleCardState extends State<ModuleCard>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -111,80 +107,32 @@ class _ModuleCardState extends State<ModuleCard>
                   color: widget.gradient.colors.first.withOpacity(0.35),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
-                  spreadRadius: 0,
                 ),
               ],
             ),
             child: Stack(
               children: [
-                // Background pattern
-                _buildCardPattern(),
-
-                // Content
-                Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Icon container
-                      Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          widget.icon,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // Emoji
-                      Text(
-                        widget.emoji,
-                        style: const TextStyle(fontSize: 22),
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      // Title
-                      Text(
-                        widget.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      // Subtitle
-                      Text(
-                        widget.subtitle,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
+                // ── Background circle decoration ──
+                Positioned(
+                  bottom: -20,
+                  right: -20,
+                  child: Container(
+                    width: 110,
+                    height: 110,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.08),
+                    ),
                   ),
                 ),
 
-                // Arrow indicator
+                // ── Arrow indicator ──
                 Positioned(
-                  top: 14,
-                  right: 14,
+                  top: 12,
+                  right: 12,
                   child: Container(
-                    width: 28,
-                    height: 28,
+                    width: 26,
+                    height: 26,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(8),
@@ -192,28 +140,77 @@ class _ModuleCardState extends State<ModuleCard>
                     child: const Icon(
                       Icons.arrow_forward_rounded,
                       color: Colors.white,
-                      size: 16,
+                      size: 14,
                     ),
+                  ),
+                ),
+
+                // ── Content ──
+                // ✅ Use padding that won't overflow — reduced from 18 to 14
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    // ✅ Use min instead of default stretch — prevents overflow
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      // Icon container
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: Icon(
+                          widget.icon,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      ),
+
+                      // ✅ Flexible instead of Spacer — adapts to available space
+                      const Flexible(child: SizedBox(height: 8)),
+
+                      // Emoji
+                      Text(
+                        widget.emoji,
+                        style: const TextStyle(fontSize: 20),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      // Title
+                      Text(
+                        widget.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+
+                      const SizedBox(height: 3),
+
+                      // Subtitle
+                      Text(
+                        widget.subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.75),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCardPattern() {
-    return Positioned(
-      bottom: -20,
-      right: -20,
-      child: Container(
-        width: 110,
-        height: 110,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white.withOpacity(0.08),
         ),
       ),
     );

@@ -14,21 +14,11 @@ class HomeController extends GetxController {
   final RxMap<String, bool> permissionStatus = <String, bool>{}.obs;
   final RxBool showPermissionBanner = false.obs;
 
-  // ─── Summary counts ───────────────────────────────────────────────────────────
-  RxInt get medicineCount =>
-      StorageService.to.getMedicines().length.obs;
-
-  int get activeMedicineCount =>
-      StorageService.to.getMedicines().where((m) => m.isActive).length;
-
-  int get activeMealCount =>
-      StorageService.to.getMeals().where((m) => m.isActive).length;
-
-  int get activeActivityCount =>
-      StorageService.to.getActivities().where((a) => a.isActive).length;
-
-  int get totalRecordsCount =>
-      StorageService.to.getMedicalRecords().length;
+  // ─── Reactive summary counts ──────────────────────────────────────────────────
+  final RxInt activeMedicineCount = 0.obs;
+  final RxInt activeMealCount = 0.obs;
+  final RxInt activeActivityCount = 0.obs;
+  final RxInt totalRecordsCount = 0.obs;
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
   @override
@@ -39,8 +29,21 @@ class HomeController extends GetxController {
 
   Future<void> _init() async {
     greeting.value = TimeUtils.getGreeting();
+    refreshCounts();
     await checkServiceStatus();
     await checkPermissions();
+  }
+
+  // ─── Refresh counts from storage ─────────────────────────────────────────────
+  void refreshCounts() {
+    activeMedicineCount.value =
+        StorageService.to.getMedicines().where((m) => m.isActive).length;
+    activeMealCount.value =
+        StorageService.to.getMeals().where((m) => m.isActive).length;
+    activeActivityCount.value =
+        StorageService.to.getActivities().where((a) => a.isActive).length;
+    totalRecordsCount.value =
+        StorageService.to.getMedicalRecords().length;
   }
 
   // ─── Service Status ──────────────────────────────────────────────────────────
@@ -61,10 +64,7 @@ class HomeController extends GetxController {
   Future<void> checkPermissions() async {
     final status = await PermissionService.to.checkAllPermissions();
     permissionStatus.assignAll(status);
-
-    // Show banner if critical permissions are missing
-    final allGranted = status.values.every((v) => v);
-    showPermissionBanner.value = !allGranted;
+    showPermissionBanner.value = !status.values.every((v) => v);
   }
 
   Future<void> requestPermissions() async {
@@ -75,5 +75,6 @@ class HomeController extends GetxController {
   // ─── Refresh greeting ────────────────────────────────────────────────────────
   void refreshGreeting() {
     greeting.value = TimeUtils.getGreeting();
+    refreshCounts();
   }
 }

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tzdata;   // ← different alias
 import '../constants/app_constants.dart';
 
 class NotificationService extends GetxService {
@@ -14,7 +14,7 @@ class NotificationService extends GetxService {
 
   // ─── Initialize ─────────────────────────────────────────────────────────────
   static Future<void> initialize() async {
-    tz.initializeTimeZones();
+    tzdata.initializeTimeZones();
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings(

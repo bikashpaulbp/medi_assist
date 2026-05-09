@@ -9,7 +9,6 @@ import 'package:medi_assist/core/constants/app_colors.dart';
 import '../../../routes/app_pages.dart';
 import '../controllers/home_controller.dart';
 
-
 class HomeView extends StatelessWidget {
   const HomeView({super.key});
 
@@ -21,7 +20,7 @@ class HomeView extends StatelessWidget {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: RefreshIndicator(
         onRefresh: () async {
-          controller.refreshGreeting();
+          controller.refreshGreeting(); // already calls refreshCounts() internally
           await controller.checkServiceStatus();
           await controller.checkPermissions();
         },

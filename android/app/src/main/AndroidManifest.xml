@@ -60,9 +60,10 @@
 
         <!-- ==================== FLUTTER FOREGROUND TASK SERVICE ==================== -->
         <service
-            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
-            android:foregroundServiceType="dataSync"
-            android:stopWithTask="false"/>
+    android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+    android:foregroundServiceType="dataSync"
+    android:exported="false"
+    android:stopWithTask="false"/>
 
         <!-- ==================== ALARM PACKAGE SERVICES ==================== -->
         <!-- Alarm foreground service -->

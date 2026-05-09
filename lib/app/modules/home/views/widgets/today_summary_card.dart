@@ -59,37 +59,39 @@ class TodaySummaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                _SummaryItem(
-                  label: 'Medicines',
-                  count: controller.activeMedicineCount,
-                  icon: Icons.medication_rounded,
-                  color: AppColors.medicineColor,
-                ),
-                _SummaryDivider(),
-                _SummaryItem(
-                  label: 'Meals',
-                  count: controller.activeMealCount,
-                  icon: Icons.restaurant_rounded,
-                  color: AppColors.mealColor,
-                ),
-                _SummaryDivider(),
-                _SummaryItem(
-                  label: 'Activities',
-                  count: controller.activeActivityCount,
-                  icon: Icons.directions_run_rounded,
-                  color: AppColors.activityColor,
-                ),
-                _SummaryDivider(),
-                _SummaryItem(
-                  label: 'Records',
-                  count: controller.totalRecordsCount,
-                  icon: Icons.monitor_heart_rounded,
-                  color: AppColors.medicalColor,
-                ),
-              ],
-            ),
+
+            // ✅ Obx now reads actual Rx observables — no more GetX error
+            Obx(() => Row(
+                  children: [
+                    _SummaryItem(
+                      label: 'Medicines',
+                      count: controller.activeMedicineCount.value,
+                      icon: Icons.medication_rounded,
+                      color: AppColors.medicineColor,
+                    ),
+                    _SummaryDivider(),
+                    _SummaryItem(
+                      label: 'Meals',
+                      count: controller.activeMealCount.value,
+                      icon: Icons.restaurant_rounded,
+                      color: AppColors.mealColor,
+                    ),
+                    _SummaryDivider(),
+                    _SummaryItem(
+                      label: 'Activities',
+                      count: controller.activeActivityCount.value,
+                      icon: Icons.directions_run_rounded,
+                      color: AppColors.activityColor,
+                    ),
+                    _SummaryDivider(),
+                    _SummaryItem(
+                      label: 'Records',
+                      count: controller.totalRecordsCount.value,
+                      icon: Icons.monitor_heart_rounded,
+                      color: AppColors.medicalColor,
+                    ),
+                  ],
+                )),
           ],
         ),
       ),
