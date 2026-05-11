@@ -11,19 +11,20 @@ import 'package:medi_assist/models/activity_model.dart';
 class ActivityController extends GetxController {
   static ActivityController get to => Get.find();
 
-  // ─── State ───────────────────────────────────────────────────────────────────
   final RxList<Activity> activities = <Activity>[].obs;
   final RxBool isLoading = false.obs;
   final RxString searchQuery = ''.obs;
+  // ✅ RxInt — safe inside Obx
+  final RxInt activeActivitiesCount = 0.obs;
+  // ✅ RxString mirror of nameController — used in suggestion chips Obx
+  final RxString nameInputRx = ''.obs;
 
-  // ─── Form State ──────────────────────────────────────────────────────────────
   final nameController = TextEditingController();
   final Rx<TimeOfDay> selectedTime = const TimeOfDay(hour: 7, minute: 0).obs;
   final RxString selectedNotifType = AppConstants.notifTypeNotification.obs;
   final RxBool isActive = true.obs;
   Activity? editingActivity;
 
-  // ─── Computed ────────────────────────────────────────────────────────────────
   List<Activity> get filteredActivities {
     if (searchQuery.value.isEmpty) return activities;
     return activities
@@ -32,13 +33,13 @@ class ActivityController extends GetxController {
         .toList();
   }
 
-  int get activeActivitiesCount =>
-      activities.where((a) => a.isActive).length;
-
-  // ─── Lifecycle ───────────────────────────────────────────────────────────────
   @override
   void onInit() {
     super.onInit();
+    // ✅ Mirror TextEditingController changes to RxString
+    nameController.addListener(() {
+      nameInputRx.value = nameController.text;
+    });
     loadActivities();
   }
 
@@ -48,12 +49,17 @@ class ActivityController extends GetxController {
     super.onClose();
   }
 
-  // ─── Load ────────────────────────────────────────────────────────────────────
+  void _refreshCounts() {
+    activeActivitiesCount.value =
+        activities.where((a) => a.isActive).length;
+  }
+
   void loadActivities() {
     isLoading.value = true;
     try {
       final data = StorageService.to.getActivities();
       activities.assignAll(data);
+      _refreshCounts();
     } catch (e) {
       AppUtils.showError('Failed to load activities');
     } finally {
@@ -61,10 +67,8 @@ class ActivityController extends GetxController {
     }
   }
 
-  // ─── Add Activity ─────────────────────────────────────────────────────────────
   Future<void> addActivity() async {
     if (!_validateForm()) return;
-
     isLoading.value = true;
     try {
       final activity = Activity(
@@ -74,18 +78,14 @@ class ActivityController extends GetxController {
         notificationType: selectedNotifType.value,
         isActive: isActive.value,
       );
-
       await StorageService.to.addActivity(activity);
       activities.add(activity);
-
+      _refreshCounts();
       if (activity.isActive) {
         await ReminderScheduler.scheduleActivity(activity);
       }
-
       AppUtils.showSuccess(
-        '${activity.name} reminder added',
-        title: 'Activity Added',
-      );
+          '${activity.name} reminder added', title: 'Activity Added');
       _resetForm();
       Get.back();
     } catch (e) {
@@ -95,34 +95,25 @@ class ActivityController extends GetxController {
     }
   }
 
-  // ─── Update Activity ──────────────────────────────────────────────────────────
   Future<void> updateActivity() async {
-    if (editingActivity == null) return;
-    if (!_validateForm()) return;
-
+    if (editingActivity == null || !_validateForm()) return;
     isLoading.value = true;
     try {
       await ReminderScheduler.cancelActivity(editingActivity!);
-
       final updated = editingActivity!.copyWith(
         name: nameController.text.trim(),
         time: selectedTime.value,
         notificationType: selectedNotifType.value,
         isActive: isActive.value,
       );
-
       await StorageService.to.updateActivity(updated);
       final idx = activities.indexWhere((a) => a.id == updated.id);
       if (idx != -1) activities[idx] = updated;
-
+      _refreshCounts();
       if (updated.isActive) {
         await ReminderScheduler.scheduleActivity(updated);
       }
-
-      AppUtils.showSuccess(
-        '${updated.name} updated',
-        title: 'Activity Updated',
-      );
+      AppUtils.showSuccess('${updated.name} updated', title: 'Activity Updated');
       _resetForm();
       Get.back();
     } catch (e) {
@@ -132,23 +123,20 @@ class ActivityController extends GetxController {
     }
   }
 
-  // ─── Delete Activity ──────────────────────────────────────────────────────────
   Future<void> deleteActivity(Activity activity) async {
     final confirmed = await AppUtils.showConfirmDialog(
       title: 'Delete Activity',
-      message:
-          'Are you sure you want to delete "${activity.name}"? Reminders will be cancelled.',
+      message: 'Are you sure you want to delete "${activity.name}"?',
       confirmText: 'Delete',
       icon: Icons.delete_outline_rounded,
     );
-
     if (!confirmed) return;
-
     isLoading.value = true;
     try {
       await ReminderScheduler.cancelActivity(activity);
       await StorageService.to.deleteActivity(activity.id);
       activities.removeWhere((a) => a.id == activity.id);
+      _refreshCounts();
       AppUtils.showSuccess('${activity.name} deleted', title: 'Deleted');
     } catch (e) {
       AppUtils.showError('Failed to delete activity.');
@@ -157,14 +145,13 @@ class ActivityController extends GetxController {
     }
   }
 
-  // ─── Toggle Active ────────────────────────────────────────────────────────────
   Future<void> toggleActive(Activity activity) async {
     try {
       final updated = activity.copyWith(isActive: !activity.isActive);
       await StorageService.to.updateActivity(updated);
       final idx = activities.indexWhere((a) => a.id == activity.id);
       if (idx != -1) activities[idx] = updated;
-
+      _refreshCounts();
       if (updated.isActive) {
         await ReminderScheduler.scheduleActivity(updated);
         AppUtils.showInfo('${updated.name} reminders enabled');
@@ -177,7 +164,6 @@ class ActivityController extends GetxController {
     }
   }
 
-  // ─── Form Helpers ─────────────────────────────────────────────────────────────
   void prepareForAdd() {
     editingActivity = null;
     _resetForm();
@@ -186,13 +172,13 @@ class ActivityController extends GetxController {
   void prepareForEdit(Activity activity) {
     editingActivity = activity;
     nameController.text = activity.name;
+    nameInputRx.value = activity.name;
     selectedTime.value = activity.time;
     selectedNotifType.value = activity.notificationType;
     isActive.value = activity.isActive;
   }
 
   void setTime(TimeOfDay time) => selectedTime.value = time;
-
   void setNotifType(String type) => selectedNotifType.value = type;
 
   bool _validateForm() {
@@ -209,6 +195,7 @@ class ActivityController extends GetxController {
 
   void _resetForm() {
     nameController.clear();
+    nameInputRx.value = '';
     selectedTime.value = const TimeOfDay(hour: 7, minute: 0);
     selectedNotifType.value = AppConstants.notifTypeNotification;
     isActive.value = true;

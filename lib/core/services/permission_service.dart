@@ -2,14 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:get/get.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 import '../constants/app_colors.dart';
 import '../services/notification_service.dart';
 
 class PermissionService extends GetxService {
   static PermissionService get to => Get.find();
 
-  // ─── Request All Permissions ─────────────────────────────────────────────────
+  // ─── Request all permissions at once ─────────────────────────────────────────
   Future<void> requestAllPermissions() async {
     await requestNotificationPermission();
     await requestExactAlarmPermission();
@@ -19,35 +19,26 @@ class PermissionService extends GetxService {
     }
   }
 
-  // ─── Notification Permission ─────────────────────────────────────────────────
+  // ─── Notification permission ──────────────────────────────────────────────────
   Future<bool> requestNotificationPermission() async {
     if (Platform.isAndroid) {
-      // Android 13+ needs POST_NOTIFICATIONS
-      final status = await Permission.notification.request();
+      final status = await ph.Permission.notification.request();
       debugPrint('📣 Notification permission: $status');
       return status.isGranted;
-    } else {
-      final granted =
-          await NotificationService.to.requestPermission();
-      return granted;
     }
+    return await NotificationService.to.requestPermission();
   }
 
   Future<bool> get isNotificationGranted async {
-    return await Permission.notification.isGranted;
+    return await ph.Permission.notification.isGranted;
   }
 
-  // ─── Exact Alarm Permission (Android 12+) ────────────────────────────────────
+  // ─── Exact alarm permission (Android 12+) ────────────────────────────────────
   Future<bool> requestExactAlarmPermission() async {
     if (!Platform.isAndroid) return true;
-
     try {
-      // Check if permission is needed
-      final canSchedule =
-          await FlutterForegroundTask.canScheduleExactAlarms;
+      final canSchedule = await FlutterForegroundTask.canScheduleExactAlarms;
       if (canSchedule) return true;
-
-      // Open settings for user to grant
       await FlutterForegroundTask.openAlarmsAndRemindersSettings();
       return false;
     } catch (e) {
@@ -60,21 +51,18 @@ class PermissionService extends GetxService {
     if (!Platform.isAndroid) return true;
     try {
       return await FlutterForegroundTask.canScheduleExactAlarms;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
-  // ─── Battery Optimization ────────────────────────────────────────────────────
+  // ─── Battery optimization ─────────────────────────────────────────────────────
   Future<bool> requestBatteryOptimizationPermission() async {
     if (!Platform.isAndroid) return true;
-
     try {
       final isIgnoring =
           await FlutterForegroundTask.isIgnoringBatteryOptimizations;
       if (isIgnoring) return true;
-
-      // Show dialog explaining why, then open settings
       await _showBatteryOptimizationDialog();
       return false;
     } catch (e) {
@@ -87,7 +75,7 @@ class PermissionService extends GetxService {
     if (!Platform.isAndroid) return true;
     try {
       return await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
@@ -121,7 +109,7 @@ class PermissionService extends GetxService {
             ),
             const SizedBox(height: 8),
             Text(
-              'To ensure MediAssist can deliver medicine and meal reminders on time — even when your phone is idle — please disable battery optimization for this app.',
+              'For MediAssist to deliver reminders on time — even when your phone is idle — please disable battery optimization for this app.',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey.shade600,
@@ -152,21 +140,18 @@ class PermissionService extends GetxService {
       ),
       barrierDismissible: false,
     );
-
     if (result == true) {
       await FlutterForegroundTask.openIgnoreBatteryOptimizationSettings();
     }
   }
 
-  // ─── System Alert Window (Draw Over Apps) ────────────────────────────────────
+  // ─── System alert window ──────────────────────────────────────────────────────
   Future<bool> requestSystemAlertWindowPermission() async {
     if (!Platform.isAndroid) return true;
-
     try {
       final canDraw = await FlutterForegroundTask.canDrawOverlays;
       if (canDraw) return true;
-
-      final status = await Permission.systemAlertWindow.request();
+      final status = await ph.Permission.systemAlertWindow.request();
       return status.isGranted;
     } catch (e) {
       debugPrint('⚠️ System alert window check failed: $e');
@@ -174,28 +159,29 @@ class PermissionService extends GetxService {
     }
   }
 
-  // ─── Check All Permissions Status ────────────────────────────────────────────
+  // ─── Check all permissions ────────────────────────────────────────────────────
   Future<Map<String, bool>> checkAllPermissions() async {
-    final notif = await Permission.notification.isGranted;
-    final battery = await isBatteryOptimizationIgnored;
-    final exactAlarm = await canScheduleExactAlarms;
-
+    final results = await Future.wait([
+      ph.Permission.notification.isGranted,
+      isBatteryOptimizationIgnored,
+      canScheduleExactAlarms,
+    ]);
     return {
-      'notification': notif,
-      'batteryOptimization': battery,
-      'exactAlarm': exactAlarm,
+      'notification':        results[0],
+      'batteryOptimization': results[1],
+      'exactAlarm':          results[2],
     };
   }
 
-  // ─── Permission Status Summary ───────────────────────────────────────────────
   Future<bool> get areAllCriticalPermissionsGranted async {
-    final notif = await Permission.notification.isGranted;
+    final notif      = await ph.Permission.notification.isGranted;
     final exactAlarm = await canScheduleExactAlarms;
     return notif && exactAlarm;
   }
 
-  // ─── Open App Settings ───────────────────────────────────────────────────────
- Future<void> openApplicationSettings() async {
-  await openAppSettings();   // openAppSettings() from permission_handler package
-}
+  // ✅ FIXED: Renamed to avoid recursive call
+  // Calls ph.openAppSettings() from permission_handler package
+  Future<void> openApplicationSettings() async {
+    await ph.openAppSettings();
+  }
 }

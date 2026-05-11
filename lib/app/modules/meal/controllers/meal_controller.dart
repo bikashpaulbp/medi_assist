@@ -11,19 +11,18 @@ import 'package:medi_assist/models/meal_model.dart';
 class MealController extends GetxController {
   static MealController get to => Get.find();
 
-  // ─── State ───────────────────────────────────────────────────────────────────
   final RxList<Meal> meals = <Meal>[].obs;
   final RxBool isLoading = false.obs;
   final RxString searchQuery = ''.obs;
+  // ✅ RxInt — safe inside Obx
+  final RxInt activeMealsCount = 0.obs;
 
-  // ─── Form State ──────────────────────────────────────────────────────────────
   final nameController = TextEditingController();
   final Rx<TimeOfDay> selectedTime = const TimeOfDay(hour: 8, minute: 0).obs;
   final RxString selectedNotifType = AppConstants.notifTypeNotification.obs;
   final RxBool isActive = true.obs;
   Meal? editingMeal;
 
-  // ─── Computed ────────────────────────────────────────────────────────────────
   List<Meal> get filteredMeals {
     if (searchQuery.value.isEmpty) return meals;
     return meals
@@ -32,9 +31,6 @@ class MealController extends GetxController {
         .toList();
   }
 
-  int get activeMealsCount => meals.where((m) => m.isActive).length;
-
-  // ─── Lifecycle ───────────────────────────────────────────────────────────────
   @override
   void onInit() {
     super.onInit();
@@ -47,12 +43,16 @@ class MealController extends GetxController {
     super.onClose();
   }
 
-  // ─── Load ────────────────────────────────────────────────────────────────────
+  void _refreshCounts() {
+    activeMealsCount.value = meals.where((m) => m.isActive).length;
+  }
+
   void loadMeals() {
     isLoading.value = true;
     try {
       final data = StorageService.to.getMeals();
       meals.assignAll(data);
+      _refreshCounts();
     } catch (e) {
       AppUtils.showError('Failed to load meals');
     } finally {
@@ -60,10 +60,8 @@ class MealController extends GetxController {
     }
   }
 
-  // ─── Add Meal ────────────────────────────────────────────────────────────────
   Future<void> addMeal() async {
     if (!_validateForm()) return;
-
     isLoading.value = true;
     try {
       final meal = Meal(
@@ -73,18 +71,11 @@ class MealController extends GetxController {
         notificationType: selectedNotifType.value,
         isActive: isActive.value,
       );
-
       await StorageService.to.addMeal(meal);
       meals.add(meal);
-
-      if (meal.isActive) {
-        await ReminderScheduler.scheduleMeal(meal);
-      }
-
-      AppUtils.showSuccess(
-        '${meal.name} reminder added',
-        title: 'Meal Added',
-      );
+      _refreshCounts();
+      if (meal.isActive) await ReminderScheduler.scheduleMeal(meal);
+      AppUtils.showSuccess('${meal.name} reminder added', title: 'Meal Added');
       _resetForm();
       Get.back();
     } catch (e) {
@@ -94,34 +85,23 @@ class MealController extends GetxController {
     }
   }
 
-  // ─── Update Meal ─────────────────────────────────────────────────────────────
   Future<void> updateMeal() async {
-    if (editingMeal == null) return;
-    if (!_validateForm()) return;
-
+    if (editingMeal == null || !_validateForm()) return;
     isLoading.value = true;
     try {
       await ReminderScheduler.cancelMeal(editingMeal!);
-
       final updated = editingMeal!.copyWith(
         name: nameController.text.trim(),
         time: selectedTime.value,
         notificationType: selectedNotifType.value,
         isActive: isActive.value,
       );
-
       await StorageService.to.updateMeal(updated);
       final idx = meals.indexWhere((m) => m.id == updated.id);
       if (idx != -1) meals[idx] = updated;
-
-      if (updated.isActive) {
-        await ReminderScheduler.scheduleMeal(updated);
-      }
-
-      AppUtils.showSuccess(
-        '${updated.name} updated',
-        title: 'Meal Updated',
-      );
+      _refreshCounts();
+      if (updated.isActive) await ReminderScheduler.scheduleMeal(updated);
+      AppUtils.showSuccess('${updated.name} updated', title: 'Meal Updated');
       _resetForm();
       Get.back();
     } catch (e) {
@@ -131,23 +111,20 @@ class MealController extends GetxController {
     }
   }
 
-  // ─── Delete Meal ─────────────────────────────────────────────────────────────
   Future<void> deleteMeal(Meal meal) async {
     final confirmed = await AppUtils.showConfirmDialog(
       title: 'Delete Meal',
-      message:
-          'Are you sure you want to delete "${meal.name}"? Reminders will be cancelled.',
+      message: 'Are you sure you want to delete "${meal.name}"?',
       confirmText: 'Delete',
       icon: Icons.delete_outline_rounded,
     );
-
     if (!confirmed) return;
-
     isLoading.value = true;
     try {
       await ReminderScheduler.cancelMeal(meal);
       await StorageService.to.deleteMeal(meal.id);
       meals.removeWhere((m) => m.id == meal.id);
+      _refreshCounts();
       AppUtils.showSuccess('${meal.name} deleted', title: 'Deleted');
     } catch (e) {
       AppUtils.showError('Failed to delete meal.');
@@ -156,14 +133,13 @@ class MealController extends GetxController {
     }
   }
 
-  // ─── Toggle Active ───────────────────────────────────────────────────────────
   Future<void> toggleActive(Meal meal) async {
     try {
       final updated = meal.copyWith(isActive: !meal.isActive);
       await StorageService.to.updateMeal(updated);
       final idx = meals.indexWhere((m) => m.id == meal.id);
       if (idx != -1) meals[idx] = updated;
-
+      _refreshCounts();
       if (updated.isActive) {
         await ReminderScheduler.scheduleMeal(updated);
         AppUtils.showInfo('${updated.name} reminders enabled');
@@ -176,7 +152,6 @@ class MealController extends GetxController {
     }
   }
 
-  // ─── Form Helpers ─────────────────────────────────────────────────────────────
   void prepareForAdd() {
     editingMeal = null;
     _resetForm();
@@ -191,7 +166,6 @@ class MealController extends GetxController {
   }
 
   void setTime(TimeOfDay time) => selectedTime.value = time;
-
   void setNotifType(String type) => selectedNotifType.value = type;
 
   bool _validateForm() {

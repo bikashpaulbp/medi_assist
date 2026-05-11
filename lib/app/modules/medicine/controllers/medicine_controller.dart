@@ -11,19 +11,18 @@ import 'package:medi_assist/models/medicine_model.dart';
 class MedicineController extends GetxController {
   static MedicineController get to => Get.find();
 
-  // ─── State ───────────────────────────────────────────────────────────────────
   final RxList<Medicine> medicines = <Medicine>[].obs;
   final RxBool isLoading = false.obs;
   final RxString searchQuery = ''.obs;
+  // ✅ RxInt — safe to use inside Obx
+  final RxInt activeMedicinesCount = 0.obs;
 
-  // ─── Form State (for Add/Edit screen) ───────────────────────────────────────
   final nameController = TextEditingController();
   final RxList<TimeOfDay> selectedTimes = <TimeOfDay>[].obs;
   final RxString selectedNotifType = AppConstants.notifTypeNotification.obs;
   final RxBool isActive = true.obs;
   Medicine? editingMedicine;
 
-  // ─── Computed ────────────────────────────────────────────────────────────────
   List<Medicine> get filteredMedicines {
     if (searchQuery.value.isEmpty) return medicines;
     return medicines
@@ -32,10 +31,6 @@ class MedicineController extends GetxController {
         .toList();
   }
 
-  int get activeMedicinesCount =>
-      medicines.where((m) => m.isActive).length;
-
-  // ─── Lifecycle ───────────────────────────────────────────────────────────────
   @override
   void onInit() {
     super.onInit();
@@ -48,12 +43,16 @@ class MedicineController extends GetxController {
     super.onClose();
   }
 
-  // ─── Load ────────────────────────────────────────────────────────────────────
+  void _refreshCounts() {
+    activeMedicinesCount.value = medicines.where((m) => m.isActive).length;
+  }
+
   void loadMedicines() {
     isLoading.value = true;
     try {
       final data = StorageService.to.getMedicines();
       medicines.assignAll(data);
+      _refreshCounts(); // ✅
     } catch (e) {
       AppUtils.showError('Failed to load medicines');
     } finally {
@@ -61,10 +60,8 @@ class MedicineController extends GetxController {
     }
   }
 
-  // ─── Add Medicine ────────────────────────────────────────────────────────────
   Future<void> addMedicine() async {
     if (!_validateForm()) return;
-
     isLoading.value = true;
     try {
       final medicine = Medicine(
@@ -74,19 +71,11 @@ class MedicineController extends GetxController {
         notificationType: selectedNotifType.value,
         isActive: isActive.value,
       );
-
       await StorageService.to.addMedicine(medicine);
       medicines.add(medicine);
-
-      // Schedule reminders
-      if (medicine.isActive) {
-        await ReminderScheduler.scheduleMedicine(medicine);
-      }
-
-      AppUtils.showSuccess(
-        '${medicine.name} reminder added successfully',
-        title: 'Medicine Added',
-      );
+      _refreshCounts(); // ✅
+      if (medicine.isActive) await ReminderScheduler.scheduleMedicine(medicine);
+      AppUtils.showSuccess('${medicine.name} reminder added', title: 'Medicine Added');
       _resetForm();
       Get.back();
     } catch (e) {
@@ -96,36 +85,23 @@ class MedicineController extends GetxController {
     }
   }
 
-  // ─── Update Medicine ─────────────────────────────────────────────────────────
   Future<void> updateMedicine() async {
-    if (editingMedicine == null) return;
-    if (!_validateForm()) return;
-
+    if (editingMedicine == null || !_validateForm()) return;
     isLoading.value = true;
     try {
-      // Cancel old reminders
       await ReminderScheduler.cancelMedicine(editingMedicine!);
-
       final updated = editingMedicine!.copyWith(
         name: nameController.text.trim(),
         times: List.from(selectedTimes),
         notificationType: selectedNotifType.value,
         isActive: isActive.value,
       );
-
       await StorageService.to.updateMedicine(updated);
       final idx = medicines.indexWhere((m) => m.id == updated.id);
       if (idx != -1) medicines[idx] = updated;
-
-      // Schedule new reminders
-      if (updated.isActive) {
-        await ReminderScheduler.scheduleMedicine(updated);
-      }
-
-      AppUtils.showSuccess(
-        '${updated.name} updated successfully',
-        title: 'Medicine Updated',
-      );
+      _refreshCounts(); // ✅
+      if (updated.isActive) await ReminderScheduler.scheduleMedicine(updated);
+      AppUtils.showSuccess('${updated.name} updated', title: 'Medicine Updated');
       _resetForm();
       Get.back();
     } catch (e) {
@@ -135,31 +111,21 @@ class MedicineController extends GetxController {
     }
   }
 
-  // ─── Delete Medicine ─────────────────────────────────────────────────────────
   Future<void> deleteMedicine(Medicine medicine) async {
     final confirmed = await AppUtils.showConfirmDialog(
       title: 'Delete Medicine',
-      message:
-          'Are you sure you want to delete "${medicine.name}"? All reminders will be cancelled.',
+      message: 'Are you sure you want to delete "${medicine.name}"?',
       confirmText: 'Delete',
-      cancelText: 'Cancel',
       icon: Icons.delete_outline_rounded,
     );
-
     if (!confirmed) return;
-
     isLoading.value = true;
     try {
-      // Cancel all reminders
       await ReminderScheduler.cancelMedicine(medicine);
-
       await StorageService.to.deleteMedicine(medicine.id);
       medicines.removeWhere((m) => m.id == medicine.id);
-
-      AppUtils.showSuccess(
-        '${medicine.name} deleted',
-        title: 'Deleted',
-      );
+      _refreshCounts(); // ✅
+      AppUtils.showSuccess('${medicine.name} deleted', title: 'Deleted');
     } catch (e) {
       AppUtils.showError('Failed to delete medicine.');
     } finally {
@@ -167,14 +133,13 @@ class MedicineController extends GetxController {
     }
   }
 
-  // ─── Toggle Active ───────────────────────────────────────────────────────────
   Future<void> toggleActive(Medicine medicine) async {
     try {
       final updated = medicine.copyWith(isActive: !medicine.isActive);
       await StorageService.to.updateMedicine(updated);
       final idx = medicines.indexWhere((m) => m.id == medicine.id);
       if (idx != -1) medicines[idx] = updated;
-
+      _refreshCounts(); // ✅
       if (updated.isActive) {
         await ReminderScheduler.scheduleMedicine(updated);
         AppUtils.showInfo('${updated.name} reminders enabled');
@@ -187,7 +152,6 @@ class MedicineController extends GetxController {
     }
   }
 
-  // ─── Form Helpers ─────────────────────────────────────────────────────────────
   void prepareForAdd() {
     editingMedicine = null;
     _resetForm();
@@ -202,16 +166,10 @@ class MedicineController extends GetxController {
   }
 
   void addTime(TimeOfDay time) {
-    // Prevent duplicate times
-    final exists = selectedTimes.any(
-      (t) => t.hour == time.hour && t.minute == time.minute,
-    );
+    final exists = selectedTimes.any((t) => t.hour == time.hour && t.minute == time.minute);
     if (!exists) {
       selectedTimes.add(time);
-      // Sort times chronologically
-      selectedTimes.sort(
-        (a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute),
-      );
+      selectedTimes.sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
     } else {
       AppUtils.showWarning('This time is already added');
     }
@@ -225,17 +183,11 @@ class MedicineController extends GetxController {
     }
   }
 
-  void setNotifType(String type) {
-    selectedNotifType.value = type;
-  }
+  void setNotifType(String type) => selectedNotifType.value = type;
 
   bool _validateForm() {
     if (nameController.text.trim().isEmpty) {
       AppUtils.showError('Please enter medicine name');
-      return false;
-    }
-    if (nameController.text.trim().length < 2) {
-      AppUtils.showError('Medicine name must be at least 2 characters');
       return false;
     }
     if (selectedTimes.isEmpty) {
@@ -253,11 +205,6 @@ class MedicineController extends GetxController {
     editingMedicine = null;
   }
 
-  void setSearchQuery(String query) {
-    searchQuery.value = query;
-  }
-
-  void clearSearch() {
-    searchQuery.value = '';
-  }
+  void setSearchQuery(String query) => searchQuery.value = query;
+  void clearSearch() => searchQuery.value = '';
 }

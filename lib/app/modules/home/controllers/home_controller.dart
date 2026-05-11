@@ -1,24 +1,25 @@
 import 'package:get/get.dart';
-import 'package:medi_assist/core/services/foreground_service.dart';
-import 'package:medi_assist/core/services/permission_service.dart';
-import 'package:medi_assist/core/services/storage_service.dart';
-import 'package:medi_assist/core/utils/time_utils.dart';
 
+// ✅ FIXED: All relative imports — no package:medi_assist/
+import '../../../../core/services/foreground_service.dart';
+import '../../../../core/services/permission_service.dart';
+import '../../../../core/services/storage_service.dart';
+import '../../../../core/utils/time_utils.dart';
 
 class HomeController extends GetxController {
   static HomeController get to => Get.find();
 
-  // ─── State ───────────────────────────────────────────────────────────────────
-  final RxBool isServiceRunning = false.obs;
-  final RxString greeting = ''.obs;
+  // ─── Reactive state ──────────────────────────────────────────────────────────
+  final RxBool isServiceRunning     = false.obs;
+  final RxString greeting           = ''.obs;
   final RxMap<String, bool> permissionStatus = <String, bool>{}.obs;
   final RxBool showPermissionBanner = false.obs;
 
-  // ─── Reactive summary counts ──────────────────────────────────────────────────
-  final RxInt activeMedicineCount = 0.obs;
-  final RxInt activeMealCount = 0.obs;
-  final RxInt activeActivityCount = 0.obs;
-  final RxInt totalRecordsCount = 0.obs;
+  // ─── Reactive summary counts ─────────────────────────────────────────────────
+  final RxInt activeMedicineCount  = 0.obs;
+  final RxInt activeMealCount      = 0.obs;
+  final RxInt activeActivityCount  = 0.obs;
+  final RxInt totalRecordsCount    = 0.obs;
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
   @override
@@ -31,22 +32,27 @@ class HomeController extends GetxController {
     greeting.value = TimeUtils.getGreeting();
     refreshCounts();
     await checkServiceStatus();
-    await checkPermissions();
+    // Use cached permission status — don't spam Android permission APIs
+    await _refreshPermissionsCached();
   }
 
-  // ─── Refresh counts from storage ─────────────────────────────────────────────
+  // ─── Counts ──────────────────────────────────────────────────────────────────
   void refreshCounts() {
-    activeMedicineCount.value =
-        StorageService.to.getMedicines().where((m) => m.isActive).length;
-    activeMealCount.value =
-        StorageService.to.getMeals().where((m) => m.isActive).length;
-    activeActivityCount.value =
-        StorageService.to.getActivities().where((a) => a.isActive).length;
-    totalRecordsCount.value =
-        StorageService.to.getMedicalRecords().length;
+    try {
+      activeMedicineCount.value =
+          StorageService.to.getMedicines().where((m) => m.isActive).length;
+      activeMealCount.value =
+          StorageService.to.getMeals().where((m) => m.isActive).length;
+      activeActivityCount.value =
+          StorageService.to.getActivities().where((a) => a.isActive).length;
+      totalRecordsCount.value =
+          StorageService.to.getMedicalRecords().length;
+    } catch (e) {
+      // Non-critical — counts stay at previous value
+    }
   }
 
-  // ─── Service Status ──────────────────────────────────────────────────────────
+  // ─── Service status ──────────────────────────────────────────────────────────
   Future<void> checkServiceStatus() async {
     isServiceRunning.value = await MediAssistForegroundService.isRunning;
   }
@@ -54,13 +60,28 @@ class HomeController extends GetxController {
   Future<void> toggleService() async {
     if (isServiceRunning.value) {
       await MediAssistForegroundService.stopService();
+      await StorageService.to.setServiceEnabled(false);
     } else {
+      MediAssistForegroundService.initService();
       await MediAssistForegroundService.startService();
+      await StorageService.to.setServiceEnabled(true);
     }
     await checkServiceStatus();
   }
 
   // ─── Permissions ─────────────────────────────────────────────────────────────
+  /// Fast check — uses Android API only if needed
+  Future<void> _refreshPermissionsCached() async {
+    try {
+      final status = await PermissionService.to.checkAllPermissions();
+      permissionStatus.assignAll(status);
+      showPermissionBanner.value = !status.values.every((v) => v);
+    } catch (_) {
+      showPermissionBanner.value = false;
+    }
+  }
+
+  /// Full check — always calls Android APIs (use for settings/manual refresh)
   Future<void> checkPermissions() async {
     final status = await PermissionService.to.checkAllPermissions();
     permissionStatus.assignAll(status);
@@ -72,7 +93,7 @@ class HomeController extends GetxController {
     await checkPermissions();
   }
 
-  // ─── Refresh greeting ────────────────────────────────────────────────────────
+  // ─── Refresh greeting + counts ───────────────────────────────────────────────
   void refreshGreeting() {
     greeting.value = TimeUtils.getGreeting();
     refreshCounts();

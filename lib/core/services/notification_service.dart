@@ -2,9 +2,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tzdata;   // ← different alias
+import 'package:timezone/data/latest_all.dart' as tzdata;
 import '../constants/app_constants.dart';
+
+// ─── Pending notification route key (for background taps) ────────────────────
+const String _kPendingRouteKey = 'pending_notification_route';
 
 class NotificationService extends GetxService {
   static NotificationService get to => Get.find();
@@ -12,43 +16,104 @@ class NotificationService extends GetxService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  // ─── Initialize ─────────────────────────────────────────────────────────────
+  // ─── Initialize ──────────────────────────────────────────────────────────────
   static Future<void> initialize() async {
     tzdata.initializeTimeZones();
 
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
 
-    const initSettings = InitializationSettings(
-      android: androidInit,
-      iOS: iosInit,
-    );
-
     await _plugin.initialize(
-      initSettings,
+      const InitializationSettings(android: androidInit, iOS: iosInit),
+      // ✅ Foreground tap — app is open
       onDidReceiveNotificationResponse: _onNotificationTap,
-      onDidReceiveBackgroundNotificationResponse: _onNotificationTap,
+      // ✅ Background tap — app was killed, runs in separate isolate
+      onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationTap,
     );
 
-    // Create all notification channels (Android)
     if (Platform.isAndroid) {
       await _createChannels();
     }
   }
 
-  // ─── Create Channels ────────────────────────────────────────────────────────
+  // ─── Notification tap handler (foreground — app is open) ──────────────────
+  @pragma('vm:entry-point')
+  static void _onNotificationTap(NotificationResponse response) {
+    debugPrint('🔔 Notification tapped: ${response.payload}');
+    _handleNotificationNavigation(response.payload);
+  }
+
+  // ─── Background notification tap (app was killed) ─────────────────────────
+  // Runs in a background isolate — cannot use GetX here
+  // Save the route to storage, pick it up when app opens
+  @pragma('vm:entry-point')
+  static void _onBackgroundNotificationTap(NotificationResponse response) {
+    debugPrint(
+        '🔔 Background notification tapped: ${response.payload}');
+    try {
+      // Save pending route to storage — will be consumed on next app open
+      final box = GetStorage();
+      final route = _payloadToRoute(response.payload);
+      if (route != null) {
+        box.write(_kPendingRouteKey, route);
+        debugPrint('📌 Pending route saved: $route');
+      }
+    } catch (e) {
+      debugPrint('❌ Error saving pending route: $e');
+    }
+  }
+
+  // ─── Navigate based on payload ────────────────────────────────────────────
+  static void _handleNotificationNavigation(String? payload) {
+    if (payload == null || payload.isEmpty) return;
+    final route = _payloadToRoute(payload);
+    if (route != null) {
+      // Small delay to ensure GetMaterialApp is ready
+      Future.delayed(const Duration(milliseconds: 300), () {
+        Get.toNamed(route);
+      });
+    }
+  }
+
+  // ─── Convert payload to route string ─────────────────────────────────────
+  static String? _payloadToRoute(String? payload) {
+    if (payload == null) return null;
+    if (payload.startsWith('medicine_')) return '/medicine';
+    if (payload.startsWith('meal_')) return '/meal';
+    if (payload.startsWith('activity_')) return '/activity';
+    if (payload.startsWith('medical_')) return '/medical-records';
+    return null;
+  }
+
+  // ─── Check & consume pending route (call this on app start) ──────────────
+  static void consumePendingRoute() {
+    try {
+      final box = GetStorage();
+      final route = box.read<String>(_kPendingRouteKey);
+      if (route != null && route.isNotEmpty) {
+        box.remove(_kPendingRouteKey);
+        debugPrint('📌 Consuming pending route: $route');
+        Future.delayed(const Duration(milliseconds: 800), () {
+          Get.toNamed(route);
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error consuming pending route: $e');
+    }
+  }
+
+  // ─── Create notification channels (Android) ───────────────────────────────
   static Future<void> _createChannels() async {
     final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
-
     if (androidPlugin == null) return;
 
-    // Medicine channel
     await androidPlugin.createNotificationChannel(
       const AndroidNotificationChannel(
         AppConstants.medicineChannelId,
@@ -62,7 +127,6 @@ class NotificationService extends GetxService {
       ),
     );
 
-    // Meal channel
     await androidPlugin.createNotificationChannel(
       const AndroidNotificationChannel(
         AppConstants.mealChannelId,
@@ -76,7 +140,6 @@ class NotificationService extends GetxService {
       ),
     );
 
-    // Activity channel
     await androidPlugin.createNotificationChannel(
       const AndroidNotificationChannel(
         AppConstants.activityChannelId,
@@ -90,24 +153,23 @@ class NotificationService extends GetxService {
       ),
     );
 
-    // Medical channel
     await androidPlugin.createNotificationChannel(
       const AndroidNotificationChannel(
         AppConstants.medicalChannelId,
         AppConstants.medicalChannelName,
-        description: 'Reminders for medical record checkups.',
+        description: 'Medical record reminders.',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
       ),
     );
 
-    // Foreground service channel
+    // Low importance — foreground service persistent notification
     await androidPlugin.createNotificationChannel(
       const AndroidNotificationChannel(
         AppConstants.foregroundChannelId,
         AppConstants.foregroundChannelName,
-        description: 'MediAssist is running in the background.',
+        description: 'MediAssist is monitoring your reminders.',
         importance: Importance.low,
         playSound: false,
         enableVibration: false,
@@ -115,15 +177,7 @@ class NotificationService extends GetxService {
     );
   }
 
-  // ─── Notification Tap Handler ────────────────────────────────────────────────
-  @pragma('vm:entry-point')
-  static void _onNotificationTap(NotificationResponse response) {
-    // Handle notification tap — navigate if needed
-    debugPrint('Notification tapped: ${response.payload}');
-  }
-
-  // ─── Schedule Daily Notification ─────────────────────────────────────────────
-  /// Schedules a daily repeating notification at [hour]:[minute]
+  // ─── Schedule daily repeating notification ────────────────────────────────
   Future<void> scheduleDailyNotification({
     required int id,
     required String title,
@@ -137,15 +191,9 @@ class NotificationService extends GetxService {
     try {
       final now = tz.TZDateTime.now(tz.local);
       var scheduledDate = tz.TZDateTime(
-        tz.local,
-        now.year,
-        now.month,
-        now.day,
-        hour,
-        minute,
+        tz.local, now.year, now.month, now.day, hour, minute,
       );
 
-      // If time already passed today, schedule for tomorrow
       if (scheduledDate.isBefore(now)) {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
@@ -155,12 +203,15 @@ class NotificationService extends GetxService {
         channelName,
         importance: Importance.max,
         priority: Priority.high,
-        fullScreenIntent: false,
+        // ✅ Shows full content in notification shade
         styleInformation: BigTextStyleInformation(body),
         category: AndroidNotificationCategory.reminder,
+        // ✅ Shows on lock screen
         visibility: NotificationVisibility.public,
         autoCancel: true,
         ongoing: false,
+        // ✅ Shows notification even when DND is active
+        fullScreenIntent: false,
       );
 
       const iosDetails = DarwinNotificationDetails(
@@ -169,30 +220,27 @@ class NotificationService extends GetxService {
         presentSound: true,
       );
 
-      final details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
       await _plugin.zonedSchedule(
         id,
         title,
         body,
         scheduledDate,
-        details,
+        NotificationDetails(android: androidDetails, iOS: iosDetails),
+        // ✅ exactAllowWhileIdle — fires even when device is in Doze mode
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        // ✅ Repeats daily at same time
         matchDateTimeComponents: DateTimeComponents.time,
         payload: payload,
       );
 
       debugPrint(
-          '✅ Notification scheduled: id=$id, title=$title, at $hour:$minute');
+          '✅ Notification scheduled: id=$id at $hour:$minute (payload: $payload)');
     } catch (e) {
-      debugPrint('❌ Failed to schedule notification: $e');
+      debugPrint('❌ Failed to schedule notification id=$id: $e');
     }
   }
 
-  // ─── Show Immediate Notification ─────────────────────────────────────────────
+  // ─── Show immediate notification ─────────────────────────────────────────
   Future<void> showImmediateNotification({
     required int id,
     required String title,
@@ -207,13 +255,13 @@ class NotificationService extends GetxService {
         channelName,
         importance: Importance.max,
         priority: Priority.high,
+        styleInformation: BigTextStyleInformation(body),
+        visibility: NotificationVisibility.public,
         autoCancel: true,
       );
 
-      const iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentSound: true,
-      );
+      const iosDetails =
+          DarwinNotificationDetails(presentAlert: true, presentSound: true);
 
       await _plugin.show(
         id,
@@ -223,35 +271,32 @@ class NotificationService extends GetxService {
         payload: payload,
       );
     } catch (e) {
-      debugPrint('❌ Failed to show notification: $e');
+      debugPrint('❌ Failed to show immediate notification id=$id: $e');
     }
   }
 
-  // ─── Cancel ──────────────────────────────────────────────────────────────────
+  // ─── Cancel ───────────────────────────────────────────────────────────────
   Future<void> cancelNotification(int id) async {
     await _plugin.cancel(id);
-    debugPrint('🗑️ Notification cancelled: id=$id');
   }
 
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
-    debugPrint('🗑️ All notifications cancelled');
   }
 
-  // ─── Medicine Notifications ──────────────────────────────────────────────────
+  // ─── Medicine notifications ───────────────────────────────────────────────
   Future<void> scheduleMedicineNotifications({
     required String medicineId,
     required String medicineName,
     required List<TimeOfDay> times,
     required int baseId,
   }) async {
-    // Cancel existing first
-    await cancelMedicineNotifications(medicineId: medicineId, times: times, baseId: baseId);
+    await cancelMedicineNotifications(
+        medicineId: medicineId, times: times, baseId: baseId);
 
     for (int i = 0; i < times.length; i++) {
-      final notifId = baseId + i;
       await scheduleDailyNotification(
-        id: notifId,
+        id: baseId + i,
         title: '💊 Medicine Reminder',
         body: 'Time to take $medicineName',
         hour: times[i].hour,
@@ -273,7 +318,7 @@ class NotificationService extends GetxService {
     }
   }
 
-  // ─── Meal Notifications ──────────────────────────────────────────────────────
+  // ─── Meal notifications ───────────────────────────────────────────────────
   Future<void> scheduleMealNotification({
     required String mealId,
     required String mealName,
@@ -293,7 +338,7 @@ class NotificationService extends GetxService {
     );
   }
 
-  // ─── Activity Notifications ──────────────────────────────────────────────────
+  // ─── Activity notifications ───────────────────────────────────────────────
   Future<void> scheduleActivityNotification({
     required String activityId,
     required String activityName,
@@ -313,31 +358,28 @@ class NotificationService extends GetxService {
     );
   }
 
-  // ─── Request Permission ──────────────────────────────────────────────────────
+  // ─── Request permission ───────────────────────────────────────────────────
   Future<bool> requestPermission() async {
     if (Platform.isAndroid) {
       final androidPlugin = _plugin
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
-      final granted =
-          await androidPlugin?.requestNotificationsPermission() ?? false;
-      return granted;
+      return await androidPlugin?.requestNotificationsPermission() ?? false;
     } else if (Platform.isIOS) {
       final iosPlugin = _plugin
           .resolvePlatformSpecificImplementation<
               IOSFlutterLocalNotificationsPlugin>();
-      final granted = await iosPlugin?.requestPermissions(
+      return await iosPlugin?.requestPermissions(
             alert: true,
             badge: true,
             sound: true,
           ) ??
           false;
-      return granted;
     }
     return true;
   }
 
-  // ─── Get Pending Notifications ───────────────────────────────────────────────
+  // ─── Get pending notifications ────────────────────────────────────────────
   Future<List<PendingNotificationRequest>> getPending() async {
     return await _plugin.pendingNotificationRequests();
   }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:medi_assist/core/constants/app_colors.dart';
-import 'package:medi_assist/core/constants/app_constants.dart';
 import 'package:medi_assist/core/utils/time_utils.dart';
+import 'package:medi_assist/core/widgets/notif_type_selector.dart';
 import '../controllers/activity_controller.dart';
 
 class AddEditActivityView extends StatelessWidget {
@@ -31,20 +31,18 @@ class AddEditActivityView extends StatelessWidget {
               _buildSectionLabel('Activity Name', Icons.sports_rounded),
               const SizedBox(height: 10),
               _buildNameField(controller, isDark),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
-              // Quick activity suggestions
+              // ✅ Fixed — uses RxString not TextEditingController.text
               _buildActivitySuggestions(controller),
               const SizedBox(height: 24),
 
               _buildSectionLabel(
                   'Reminder Time', Icons.access_time_rounded),
               const SizedBox(height: 4),
-              Text(
-                'Set your daily activity reminder time',
-                style:
-                    TextStyle(fontSize: 12, color: Colors.grey.shade500),
-              ),
+              Text('Set your daily activity reminder time',
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.grey.shade500)),
               const SizedBox(height: 12),
               _buildTimePickerCard(controller, context, isDark),
               const SizedBox(height: 24),
@@ -52,13 +50,17 @@ class AddEditActivityView extends StatelessWidget {
               _buildSectionLabel(
                   'Reminder Type', Icons.notifications_rounded),
               const SizedBox(height: 4),
-              Text(
-                'How would you like to be reminded?',
-                style:
-                    TextStyle(fontSize: 12, color: Colors.grey.shade500),
-              ),
+              Text('How would you like to be reminded?',
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.grey.shade500)),
               const SizedBox(height: 12),
-              _buildNotifTypeSelector(controller, isDark),
+
+              // ✅ Shared reusable widget — no more GridView.builder bug
+              NotifTypeSelector(
+                selectedNotifType: controller.selectedNotifType,
+                onChanged: controller.setNotifType,
+                isDark: isDark,
+              ),
               const SizedBox(height: 24),
 
               _buildActiveToggle(controller, isDark),
@@ -73,7 +75,6 @@ class AddEditActivityView extends StatelessWidget {
     );
   }
 
-  // ─── AppBar ──────────────────────────────────────────────────────────────────
   PreferredSizeWidget _buildAppBar(
       BuildContext context, bool isEditing, bool isDark) {
     return AppBar(
@@ -86,8 +87,8 @@ class AddEditActivityView extends StatelessWidget {
             color: isDark ? AppColors.darkCard : AppColors.lightCard,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-            ),
+                color:
+                    isDark ? AppColors.darkBorder : AppColors.lightBorder),
           ),
           child: const Icon(Icons.close_rounded, size: 20),
         ),
@@ -95,15 +96,11 @@ class AddEditActivityView extends StatelessWidget {
       title: Text(
         isEditing ? 'Edit Activity' : 'Add Activity',
         style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
-        ),
+            fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3),
       ),
     );
   }
 
-  // ─── Header Card ─────────────────────────────────────────────────────────────
   Widget _buildHeaderCard(bool isEditing) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -120,11 +117,8 @@ class AddEditActivityView extends StatelessWidget {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(
-              Icons.directions_run_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: const Icon(Icons.directions_run_rounded,
+                color: Colors.white, size: 28),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -134,10 +128,9 @@ class AddEditActivityView extends StatelessWidget {
                 Text(
                   isEditing ? 'Update Activity' : 'New Activity Reminder',
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -145,9 +138,7 @@ class AddEditActivityView extends StatelessWidget {
                       ? 'Modify activity details and save'
                       : 'Stay active with daily reminders',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 12,
-                  ),
+                      color: Colors.white.withOpacity(0.8), fontSize: 12),
                 ),
               ],
             ),
@@ -157,25 +148,17 @@ class AddEditActivityView extends StatelessWidget {
     );
   }
 
-  // ─── Section Label ────────────────────────────────────────────────────────────
   Widget _buildSectionLabel(String label, IconData icon) {
     return Row(
       children: [
         Icon(icon, size: 18, color: AppColors.activityColor),
         const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
+        Text(label,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
       ],
     );
   }
 
-  // ─── Name Field ───────────────────────────────────────────────────────────────
   Widget _buildNameField(ActivityController controller, bool isDark) {
     return TextField(
       controller: controller.nameController,
@@ -183,33 +166,27 @@ class AddEditActivityView extends StatelessWidget {
       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         hintText: 'e.g. Morning Run, Yoga, Gym...',
-        prefixIcon: const Icon(
-          Icons.sports_outlined,
-          color: AppColors.activityColor,
-          size: 20,
-        ),
+        prefixIcon: const Icon(Icons.sports_outlined,
+            color: AppColors.activityColor, size: 20),
         filled: true,
         fillColor: isDark ? AppColors.darkCard : AppColors.lightCard,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-          ),
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(
-            color: AppColors.activityColor,
-            width: 1.8,
-          ),
+          borderSide:
+              const BorderSide(color: AppColors.activityColor, width: 1.8),
         ),
       ),
     );
   }
 
-  // ─── Activity Suggestions ─────────────────────────────────────────────────────
+  // ✅ Uses nameInputRx (RxString) NOT nameController.text (non-Rx)
   Widget _buildActivitySuggestions(ActivityController controller) {
-    final suggestions = [
+    const suggestions = [
       ('🏃', 'Morning Run'),
       ('🚶', 'Evening Walk'),
       ('🧘', 'Yoga'),
@@ -221,28 +198,24 @@ class AddEditActivityView extends StatelessWidget {
     ];
 
     return Obx(() {
+      // ✅ RxString — properly tracked by GetX
+      final currentName = controller.nameInputRx.value.trim();
+
       return Wrap(
         spacing: 8,
         runSpacing: 8,
+        // ✅ .toList() forces EAGER evaluation — all items built immediately
         children: suggestions.map((s) {
-          final isSelected =
-              controller.nameController.text.trim() == s.$2;
+          final isSelected = currentName == s.$2;
           return GestureDetector(
             onTap: () {
               controller.nameController.text = s.$2;
-              controller.nameController.selection =
-                  TextSelection.fromPosition(
-                TextPosition(
-                  offset: controller.nameController.text.length,
-                ),
-              );
+              // nameInputRx updates automatically via the listener in controller
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected
                     ? AppColors.activityColor.withOpacity(0.12)
@@ -279,7 +252,6 @@ class AddEditActivityView extends StatelessWidget {
     });
   }
 
-  // ─── Time Picker Card ─────────────────────────────────────────────────────────
   Widget _buildTimePickerCard(
       ActivityController controller, BuildContext context, bool isDark) {
     return Obx(() {
@@ -292,22 +264,10 @@ class AddEditActivityView extends StatelessWidget {
             color: isDark ? AppColors.darkCard : AppColors.lightCard,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: AppColors.activityColor.withOpacity(0.4),
-              width: 1.5,
-            ),
-            boxShadow: isDark
-                ? []
-                : [
-                    BoxShadow(
-                      color: AppColors.activityColor.withOpacity(0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                color: AppColors.activityColor.withOpacity(0.4), width: 1.5),
           ),
           child: Row(
             children: [
-              // Clock visual
               Container(
                 width: 64,
                 height: 64,
@@ -323,20 +283,18 @@ class AddEditActivityView extends StatelessWidget {
                           .toString()
                           .padLeft(2, '0'),
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        height: 1.0,
-                      ),
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          height: 1.0),
                     ),
                     Text(
                       t.minute.toString().padLeft(2, '0'),
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.85),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        height: 1.0,
-                      ),
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          height: 1.0),
                     ),
                   ],
                 ),
@@ -349,18 +307,15 @@ class AddEditActivityView extends StatelessWidget {
                     Text(
                       TimeUtils.formatTimeOfDay(t),
                       style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       _getTimeSuggestion(t.hour),
                       style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade500,
-                      ),
+                          fontSize: 13, color: Colors.grey.shade500),
                     ),
                   ],
                 ),
@@ -372,11 +327,8 @@ class AddEditActivityView extends StatelessWidget {
                   color: AppColors.activityColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.edit_rounded,
-                  color: AppColors.activityColor,
-                  size: 18,
-                ),
+                child: const Icon(Icons.edit_rounded,
+                    color: AppColors.activityColor, size: 18),
               ),
             ],
           ),
@@ -390,17 +342,13 @@ class AddEditActivityView extends StatelessWidget {
     final picked = await showTimePicker(
       context: context,
       initialTime: controller.selectedTime.value,
-      builder: (ctx, child) {
-        return Theme(
-          data: Theme.of(ctx).copyWith(
-            colorScheme: Theme.of(ctx).colorScheme.copyWith(
-                  primary: AppColors.activityColor,
-                  onPrimary: Colors.white,
-                ),
-          ),
-          child: child!,
-        );
-      },
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(
+                primary: AppColors.activityColor, onPrimary: Colors.white),
+        ),
+        child: child!,
+      ),
     );
     if (picked != null) controller.setTime(picked);
   }
@@ -415,250 +363,111 @@ class AddEditActivityView extends StatelessWidget {
     return '⏰ Custom activity time';
   }
 
-  // ─── Notification Type Selector ───────────────────────────────────────────────
-  Widget _buildNotifTypeSelector(
-      ActivityController controller, bool isDark) {
-    final types = [
-      (
-        AppConstants.notifTypeNotification,
-        'Notification',
-        'Silent push notification',
-        Icons.notifications_outlined,
-        AppColors.primary,
-      ),
-      (
-        AppConstants.notifTypeAlarm,
-        'Alarm',
-        'Loud alarm with sound',
-        Icons.alarm_rounded,
-        AppColors.warning,
-      ),
-      (
-        AppConstants.notifTypeBoth,
-        'Both',
-        'Notification + Alarm',
-        Icons.notifications_active_rounded,
-        AppColors.secondary,
-      ),
-      (
-        AppConstants.notifTypeNone,
-        'None',
-        'No reminder',
-        Icons.notifications_off_outlined,
-        Colors.grey,
-      ),
-    ];
-
-    return Obx(() {
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 2.4,
-        ),
-        itemCount: types.length,
-        itemBuilder: (ctx, i) {
-          final type = types[i];
-          final isSelected =
-              controller.selectedNotifType.value == type.$1;
-          return GestureDetector(
-            onTap: () => controller.setNotifType(type.$1),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? type.$5.withOpacity(0.1)
-                    : (isDark ? AppColors.darkCard : AppColors.lightCard),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isSelected
-                      ? type.$5
-                      : (isDark
-                          ? AppColors.darkBorder
-                          : AppColors.lightBorder),
-                  width: isSelected ? 1.8 : 1,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
-                child: Row(
-                  children: [
-                    Icon(
-                      type.$4,
-                      color:
-                          isSelected ? type.$5 : Colors.grey.shade400,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            type.$2,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: isSelected ? type.$5 : null,
-                            ),
-                          ),
-                          Text(
-                            type.$3,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey.shade500,
-                              height: 1.2,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (isSelected)
-                      Icon(
-                        Icons.check_circle_rounded,
-                        color: type.$5,
-                        size: 16,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    });
-  }
-
-  // ─── Active Toggle ────────────────────────────────────────────────────────────
   Widget _buildActiveToggle(ActivityController controller, bool isDark) {
-    return Obx(() {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.lightCard,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+    return Obx(() => Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkCard : AppColors.lightCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color:
+                    isDark ? AppColors.darkBorder : AppColors.lightBorder),
           ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: controller.isActive.value
-                    ? AppColors.secondary.withOpacity(0.1)
-                    : Colors.grey.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(11),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: controller.isActive.value
+                      ? AppColors.secondary.withOpacity(0.1)
+                      : Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  controller.isActive.value
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.pause_circle_outline_rounded,
+                  color: controller.isActive.value
+                      ? AppColors.secondary
+                      : Colors.grey,
+                  size: 22,
+                ),
               ),
-              child: Icon(
-                controller.isActive.value
-                    ? Icons.check_circle_outline_rounded
-                    : Icons.pause_circle_outline_rounded,
-                color: controller.isActive.value
-                    ? AppColors.secondary
-                    : Colors.grey,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Enable Reminders',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    controller.isActive.value
-                        ? 'Activity reminders are active'
-                        : 'Activity reminders are paused',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Switch(
-              value: controller.isActive.value,
-              onChanged: (v) => controller.isActive.value = v,
-              activeColor: AppColors.secondary,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
-  // ─── Save Button ──────────────────────────────────────────────────────────────
-  Widget _buildSaveButton(ActivityController controller, bool isEditing) {
-    return Obx(() {
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: controller.isLoading.value
-              ? null
-              : () => isEditing
-                  ? controller.updateActivity()
-                  : controller.addActivity(),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.activityColor,
-            disabledBackgroundColor:
-                AppColors.activityColor.withOpacity(0.5),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: 0,
-          ),
-          child: controller.isLoading.value
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2.5,
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      isEditing
-                          ? Icons.save_rounded
-                          : Icons.add_circle_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
+                    const Text('Enable Reminders',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w700)),
                     Text(
-                      isEditing ? 'Save Changes' : 'Add Activity',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 0.3,
-                      ),
+                      controller.isActive.value
+                          ? 'Activity reminders are active'
+                          : 'Activity reminders are paused',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade500),
                     ),
                   ],
                 ),
-        ),
-      );
-    });
+              ),
+              Switch(
+                value: controller.isActive.value,
+                onChanged: (v) => controller.isActive.value = v,
+                activeColor: AppColors.secondary,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
+        ));
+  }
+
+  Widget _buildSaveButton(ActivityController controller, bool isEditing) {
+    return Obx(() => SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: controller.isLoading.value
+                ? null
+                : () => isEditing
+                    ? controller.updateActivity()
+                    : controller.addActivity(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.activityColor,
+              disabledBackgroundColor:
+                  AppColors.activityColor.withOpacity(0.5),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
+            ),
+            child: controller.isLoading.value
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2.5),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                          isEditing
+                              ? Icons.save_rounded
+                              : Icons.add_circle_rounded,
+                          color: Colors.white,
+                          size: 20),
+                      const SizedBox(width: 10),
+                      Text(
+                        isEditing ? 'Save Changes' : 'Add Activity',
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white),
+                      ),
+                    ],
+                  ),
+          ),
+        ));
   }
 }
