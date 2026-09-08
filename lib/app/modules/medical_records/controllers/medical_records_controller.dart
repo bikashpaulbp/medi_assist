@@ -15,6 +15,9 @@ class MedicalRecordsController extends GetxController {
   final RxList<MedicalRecord> filteredRecords = <MedicalRecord>[].obs;
   final RxBool isLoading = false.obs;
   final RxString currentType = ''.obs;
+  // AI_Assisted: Month filtering support
+  final RxInt selectedMonth = DateTime.now().month.obs;
+  final RxInt selectedYear = DateTime.now().year.obs;
 
   // ─── Form State ──────────────────────────────────────────────────────────────
   final resultController = TextEditingController();
@@ -87,9 +90,7 @@ class MedicalRecordsController extends GetxController {
     try {
       final data = StorageService.to.getMedicalRecords();
       allRecords.assignAll(data);
-      if (currentType.value.isNotEmpty) {
-        _filterByCurrentType();
-      }
+      _applyFilters();
     } catch (e) {
       AppUtils.showError('Failed to load medical records');
     } finally {
@@ -99,15 +100,41 @@ class MedicalRecordsController extends GetxController {
 
   void loadRecordsByType(String type) {
     currentType.value = type;
-    _filterByCurrentType();
+    _applyFilters();
+  }
+
+  // AI_Assisted: Month filtering methods
+  void setMonth(int month) {
+    selectedMonth.value = month;
+    _applyFilters();
+  }
+
+  void setYear(int year) {
+    selectedYear.value = year;
+    _applyFilters();
+  }
+
+  void _applyFilters() {
+    var records = allRecords;
+    
+    // Filter by type if selected
+    if (currentType.value.isNotEmpty) {
+      records = records.where((r) => r.type == currentType.value).toList();
+    }
+    
+    // Filter by month and year
+    records = records.where((r) {
+      return r.dateTime.month == selectedMonth.value &&
+             r.dateTime.year == selectedYear.value;
+    }).toList();
+    
+    // Sort by date descending
+    records.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    filteredRecords.assignAll(records);
   }
 
   void _filterByCurrentType() {
-    final records = allRecords
-        .where((r) => r.type == currentType.value)
-        .toList()
-      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-    filteredRecords.assignAll(records);
+    _applyFilters();
   }
 
   // ─── Add Record ──────────────────────────────────────────────────────────────
