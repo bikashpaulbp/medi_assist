@@ -7,6 +7,7 @@ import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/permission_service.dart';
 import '../../../../core/services/reminder_scheduler.dart';
 import '../../../../core/services/storage_service.dart';
+import '../../../../core/services/backup_service.dart';
 import '../../../../core/utils/app_utils.dart';
 import '../../../../core/constants/app_constants.dart';
 
@@ -190,6 +191,28 @@ class SettingsController extends GetxController {
       );
     } catch (e) {
       AppUtils.showError('Failed to clear data');
+    }
+  }
+
+  // ─── Export Backup ────────────────────────────────────────────────────────────
+  Future<void> exportBackup() async {
+    final success = await BackupService.to.exportData();
+    if (success) {
+      AppUtils.showSuccess('Backup exported successfully!');
+    } else {
+      AppUtils.showError('Failed to export backup');
+    }
+  }
+
+  // ─── Import Backup ────────────────────────────────────────────────────────────
+  Future<void> importBackup() async {
+    final success = await BackupService.to.importData();
+    if (success) {
+      AppUtils.showSuccess('Backup imported successfully! Please restart the app.');
+      // Optionally reload data
+      Get.back(); // Close settings
+    } else {
+      AppUtils.showError('Import cancelled or failed');
     }
   }
 }
