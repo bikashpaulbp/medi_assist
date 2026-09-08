@@ -162,6 +162,7 @@ class StorageService extends GetxService {
   // ─── ACTIVITY ────────────────────────────────────────────────────
   // ════════════════════════════════════════════════════════════════
 
+  /// Get all activities
   List<Activity> getActivities() {
     try {
       final data = _dataBox.read<List>(AppConstants.activitiesKey);
@@ -170,6 +171,7 @@ class StorageService extends GetxService {
           .map((e) => Activity.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
     } catch (e) {
+      debugPrint('Error getting activities: $e');
       return [];
     }
   }
