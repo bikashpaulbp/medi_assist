@@ -29,6 +29,11 @@ class MedicalRecordsView extends StatelessWidget {
               child: _buildSummaryHeader(controller, isDark),
             ),
 
+            // AI_Assisted: Month/Year Filter Row
+            SliverToBoxAdapter(
+              child: _buildMonthYearFilter(controller, isDark),
+            ),
+
             // ── Section Title ──
             SliverToBoxAdapter(
               child: Padding(
@@ -51,7 +56,7 @@ class MedicalRecordsView extends StatelessWidget {
                     ),
                     const Spacer(),
                     Obx(() => Text(
-                          '${controller.allRecords.length} total entries',
+                          '${controller.filteredRecords.length} entries',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade500,
@@ -299,13 +304,102 @@ class MedicalRecordsView extends StatelessWidget {
     });
   }
 
+  // AI_Assisted: Month/Year Filter Widget
+  Widget _buildMonthYearFilter(
+      MedicalRecordsController controller, bool isDark) {
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final currentYear = DateTime.now().year;
+    final years = List.generate(5, (i) => currentYear - i);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: [
+          Icon(
+            Icons.calendar_month_rounded,
+            size: 18,
+            color: AppColors.medicalColor,
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'Filter by Month:',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          // Month Dropdown
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : AppColors.lightCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              ),
+            ),
+            child: Obx(() => DropdownButton<int>(
+                  value: controller.selectedMonth.value,
+                  underline: const SizedBox.shrink(),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                  items: List.generate(12, (index) {
+                    return DropdownMenuItem(
+                      value: index + 1,
+                      child: Text(
+                        months[index],
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    );
+                  }),
+                  onChanged: (value) {
+                    if (value != null) controller.setMonth(value);
+                  },
+                )),
+          ),
+          const SizedBox(width: 8),
+          // Year Dropdown
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : AppColors.lightCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              ),
+            ),
+            child: Obx(() => DropdownButton<int>(
+                  value: controller.selectedYear.value,
+                  underline: const SizedBox.shrink(),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                  items: years.map((year) {
+                    return DropdownMenuItem(
+                      value: year,
+                      child: Text(
+                        year.toString(),
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) controller.setYear(value);
+                  },
+                )),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ─── Recent Entries ───────────────────────────────────────────────────────────
   Widget _buildRecentEntries(
       MedicalRecordsController controller, bool isDark) {
     return Obx(() {
-      final recent = controller.allRecords.toList()
-        ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-      final top5 = recent.take(5).toList();
+      // Use filteredRecords which already has month/year filtering applied
+      final top5 = controller.filteredRecords.take(5).toList();
 
       if (top5.isEmpty) return const SizedBox.shrink();
 
