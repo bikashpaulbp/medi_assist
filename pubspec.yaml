@@ -33,6 +33,15 @@ dependencies:
   intl: ^0.20.2
   cupertino_icons: ^1.0.8
 
+  # File Picker - for backup import
+  file_picker: ^8.1.2
+  
+  # Path Provider - for backup export
+  path_provider: ^2.1.5
+  
+  # Share Plus - for sharing backup files
+  share_plus: ^10.1.2
+
 
 dev_dependencies:
   flutter_test:

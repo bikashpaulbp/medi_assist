@@ -53,6 +53,12 @@ class SettingsView extends StatelessWidget {
           _buildDataCard(controller, isDark),
           const SizedBox(height: 24),
 
+          // ── Backup & Restore ──
+          _buildSectionTitle('Backup & Restore'),
+          const SizedBox(height: 10),
+          _buildBackupCard(controller, isDark),
+          const SizedBox(height: 24),
+
           // ── About ──
           _buildAboutCard(isDark),
           const SizedBox(height: 16),
@@ -368,6 +374,33 @@ class SettingsView extends StatelessWidget {
           subtitle: 'Delete all medicines, meals, records & activities',
           titleColor: AppColors.danger,
           onTap: controller.clearAllData,
+          showDivider: false,
+        ),
+      ],
+    );
+  }
+
+  // ─── Backup & Restore Card ────────────────────────────────────────────────────
+  Widget _buildBackupCard(SettingsController controller, bool isDark) {
+    return _SettingsCard(
+      isDark: isDark,
+      children: [
+        _SettingsTile(
+          isDark: isDark,
+          icon: Icons.backup_rounded,
+          iconColor: AppColors.primary,
+          title: 'Export Backup',
+          subtitle: 'Save your data to a file',
+          onTap: controller.exportBackup,
+          showDivider: true,
+        ),
+        _SettingsTile(
+          isDark: isDark,
+          icon: Icons.restore_from_trash_rounded,
+          iconColor: AppColors.secondary,
+          title: 'Import Backup',
+          subtitle: 'Restore data from a backup file',
+          onTap: controller.importBackup,
           showDivider: false,
         ),
       ],
